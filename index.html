@@ -184,13 +184,17 @@ input, textarea, select { font-family: inherit; }
     align-items: start;
   }
 
-  /* modal: center, not bottom sheet */
-  .modal-overlay { align-items: center; }
+  /* modal: center on screen, not bottom sheet */
+  .modal-overlay {
+    align-items: flex-start;
+    padding-top: 5vh;
+  }
   .modal {
     border-radius: 20px;
     max-width: 520px;
     padding: 28px 28px 32px;
     box-shadow: 0 24px 80px rgba(0,0,0,.65);
+    margin: 0 auto;
   }
   .modal__handle { display: none; }
 
@@ -208,6 +212,20 @@ input, textarea, select { font-family: inherit; }
   .tx-item:hover { transform: none; }
   .tx-icon { width: 42px; height: 42px; font-size: 19px; }
   .tx-cat { font-size: 14px; }
+
+  /* on desktop: actions always visible inline next to amount */
+  .tx-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .tx-actions {
+    display: flex !important; /* always show on desktop */
+    gap: 5px;
+    margin-top: 0;
+  }
+  .tx-action-btn { padding: 3px 10px; font-size: 12px; }
 
   /* currency grid 5-col on desktop */
   .currency-grid { grid-template-columns: repeat(5, 1fr); }
@@ -490,22 +508,24 @@ input, textarea, select { font-family: inherit; }
 .tx-amount--exp { color: var(--c-red); }
 .tx-who { font-size: 10px; color: var(--c-txt3); margin-top: 2px; }
 .tx-actions {
-  display: flex;
+  display: none; /* hidden on mobile */
   gap: 4px;
   margin-top: 4px;
   justify-content: flex-end;
 }
+.tx-item:hover .tx-actions { display: flex; }
 .tx-action-btn {
-  background: none;
-  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 6px;
-  color: var(--c-txt3);
-  font-size: 11px;
-  padding: 2px 7px;
-  transition: border-color .15s, color .15s;
+  color: var(--c-txt2);
+  font-size: 12px;
+  padding: 3px 9px;
+  transition: border-color .15s, color .15s, background .15s;
 }
-.tx-action-btn:hover { border-color: rgba(255,255,255,.2); color: var(--c-txt); }
-.tx-action-btn--del:hover { border-color: var(--c-red); color: var(--c-red); }
+.tx-action-btn:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.25); color: var(--c-txt); }
+.tx-action-btn--del { color: var(--c-txt3); }
+.tx-action-btn--del:hover { background: rgba(232,65,58,.12); border-color: var(--c-red); color: var(--c-red); }
 
 /* ═══════════════════════════════════════
    CHIPS (role/type/filter toggles)
@@ -559,16 +579,16 @@ input, textarea, select { font-family: inherit; }
   transition: border-color .2s;
 }
 .amount-wrap:focus-within { border-color: rgba(40,194,72,.3); }
-.amount-wrap__sym { font-size: 28px; font-weight: 700; color: var(--c-txt3); flex-shrink: 0; }
+.amount-wrap__sym { font-size: 22px; font-weight: 700; color: var(--c-txt3); flex-shrink: 0; }
 .amount-wrap__input {
-  font-size: 40px;
+  font-size: 28px;
   font-weight: 700;
   border: none;
   background: none;
   color: var(--c-txt);
   width: 100%;
   outline: none;
-  letter-spacing: -1px;
+  letter-spacing: -.5px;
 }
 .amount-wrap__input::placeholder { color: var(--c-txt4); }
 
@@ -594,7 +614,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.4); curs
 textarea { resize: none; height: 54px; }
 .textarea--sm { height: 48px; }
 
-.amount-wrap__input--sm { font-size: 28px; }
+.amount-wrap__input--sm { font-size: 24px; }
 
 .btn-submit {
   width: 100%;
@@ -755,6 +775,7 @@ textarea { resize: none; height: 54px; }
   z-index: 50;
   align-items: flex-end;
   justify-content: center;
+  overflow-y: auto;
 }
 .modal-overlay.is-open { display: flex; }
 .modal {
@@ -1080,7 +1101,7 @@ textarea { resize: none; height: 54px; }
             <span class="quick-btn__arrow">→</span>
           </button>
           <button class="quick-btn quick-btn--green" onclick="go('add')">
-            <span class="quick-btn__left">➕ Добавить</span>
+            <span class="quick-btn__left">➕ Добавить расход / доход</span>
             <span class="quick-btn__arrow">→</span>
           </button>
           <button class="quick-btn" onclick="go('list')">
@@ -1798,6 +1819,11 @@ function drawPie() {
 lload();
 go('home');
 loadCloud();
+
+/* ── ENTER KEY on amount input ── */
+el('amount-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addTx(); }
+});
 </script>
 </body>
 </html>
