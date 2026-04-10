@@ -203,32 +203,7 @@ input, textarea, select { font-family: inherit; }
     align-items: start;
   }
 
-/* modal: centered on desktop, scrollable if needed */
-  .modal-overlay {
-    align-items: flex-start;
-    justify-content: center;
-    padding: 5vh 20px;
-  }
-  .modal {
-    border-radius: var(--r-xl);
-    max-width: 520px;
-    width: 100%;
-    padding: 32px 32px 36px;
-    box-shadow: 0 32px 96px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.05);
-    margin: 0;
-    border-top: none;
-    max-height: none;
-  }
-  .modal__handle { display: none; }
-
-  /* pie modal side-by-side */
-  #modal-analytics .modal { max-width: 700px; }
-  #modal-analytics .pie-layout {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 32px;
-  }
-  #modal-analytics canvas { flex-shrink: 0; }
+/* modal: centered on desktop, scrollable if needed — see @media 1024px block */
 
   /* tx rows on desktop */
   .tx-item { padding: 13px 14px; border-radius: var(--r-lg); }
@@ -256,6 +231,34 @@ input, textarea, select { font-family: inherit; }
   /* stat card bigger on desktop */
   .stat-card { padding: 20px; }
   .stat-card__value { font-size: 28px; }
+
+  /* modal: vertically centered on desktop */
+  .modal-overlay {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal {
+    border-radius: var(--r-xl);
+    max-width: 520px;
+    width: 100%;
+    padding: 32px 32px 36px;
+    box-shadow: 0 32px 96px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.05);
+    margin: 0;
+    border-top: none;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal__handle { display: none; }
+
+  /* pie modal wider */
+  #modal-analytics .modal { max-width: 700px; }
+  #modal-analytics .pie-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 32px;
+  }
+  #modal-analytics canvas { flex-shrink: 0; }
 }
 
 @media (min-width: 1280px) {
@@ -665,10 +668,11 @@ textarea { resize: none; height: 54px; }
   font-weight: 700;
   transition: opacity .18s, transform .12s;
   letter-spacing: -.1px;
+  box-shadow: 0 4px 20px rgba(46,204,82,.25);
 }
-.btn-submit:hover { opacity: .88; transform: translateY(-1px); }
+.btn-submit:hover { opacity: .88; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(46,204,82,.35); }
 .btn-submit:active { transform: scale(.98); }
-.btn-submit:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+.btn-submit:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .add-cat-form { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .add-cat-form input { flex: 1; min-width: 90px; }
@@ -1130,8 +1134,41 @@ textarea { resize: none; height: 54px; }
 }
 
 /* ═══════════════════════════════════════
-   PIE CHART — RANGE SELECTOR
+   SWIPE-TO-DELETE (mobile only)
 ═══════════════════════════════════════ */
+.tx-swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-md);
+}
+.tx-swipe-bg {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 72px;
+  background: var(--c-red);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: var(--r-md);
+  opacity: 0;
+  transition: opacity .15s;
+  pointer-events: none;
+}
+.tx-swipe-wrap.swiping .tx-swipe-bg { opacity: 1; }
+.tx-swipe-item {
+  background: var(--c-bg);
+  position: relative;
+  transform: translateX(0);
+  transition: transform .2s ease;
+  will-change: transform;
+}
+.tx-swipe-item.snapped { transform: translateX(-72px); }
+@media (min-width: 1024px) {
+  .tx-swipe-wrap { overflow: visible; }
+  .tx-swipe-bg   { display: none; }
+  .tx-swipe-item { transform: none !important; transition: none; }
+}
 .pie-range-row {
   display: flex;
   align-items: center;
@@ -1837,7 +1874,7 @@ function txHTML(tx, showActions) {
       <button class="tx-action-btn" onclick="openEdit('${tx.id}')">✏️</button>
       <button class="tx-action-btn tx-action-btn--del" onclick="delTx('${tx.id}')">🗑</button>
     </div>` : '';
-  return `<div class="tx-item">
+  const row = `<div class="tx-item">
     <div class="tx-icon">${cat?.emoji||'📌'}</div>
     <div class="tx-info">
       <div class="tx-cat">${cat?.name||'Удалённая категория'}${cmt}</div>
@@ -1848,6 +1885,13 @@ function txHTML(tx, showActions) {
       <div class="tx-who">${who}</div>
       ${actions}
     </div>
+  </div>`;
+
+  if (!showActions) return row; // home screen — no swipe
+  // list screen — wrap in swipe container (mobile swipe-to-delete)
+  return `<div class="tx-swipe-wrap" data-id="${tx.id}">
+    <div class="tx-swipe-bg">🗑</div>
+    <div class="tx-swipe-item">${row}</div>
   </div>`;
 }
 
@@ -2143,6 +2187,84 @@ loadCloud();
 el('amount-input')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); addTx(); }
 });
+
+/* ── SWIPE-TO-DELETE (mobile, list screen only) ── */
+(function initSwipe() {
+  const THRESHOLD = 60; // px to trigger delete
+  let startX = 0, startY = 0, wrap = null, inner = null, dragging = false, locked = false;
+
+  function getWrap(target) {
+    return target.closest('.tx-swipe-wrap');
+  }
+
+  function resetAll(except) {
+    document.querySelectorAll('.tx-swipe-item.snapped').forEach(el => {
+      if (el.closest('.tx-swipe-wrap') !== except) {
+        el.classList.remove('snapped');
+        el.closest('.tx-swipe-wrap')?.classList.remove('swiping');
+      }
+    });
+  }
+
+  document.addEventListener('touchstart', e => {
+    if (window.innerWidth >= 1024) return;
+    wrap = getWrap(e.target);
+    if (!wrap) { resetAll(null); return; }
+    inner = wrap.querySelector('.tx-swipe-item');
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    dragging = false;
+    locked = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!wrap || !inner || window.innerWidth >= 1024) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    if (!locked) {
+      if (Math.abs(dy) > Math.abs(dx)) { wrap = null; return; } // vertical scroll
+      locked = true;
+    }
+    if (dx > 0) { // swiping right — snap back
+      inner.style.transform = 'translateX(0)';
+      inner.classList.remove('snapped');
+      wrap.classList.remove('swiping');
+      return;
+    }
+    dragging = true;
+    const x = Math.max(-90, dx);
+    inner.style.transform = `translateX(${x}px)`;
+    wrap.classList.toggle('swiping', x < -20);
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchend', e => {
+    if (!wrap || !inner || !dragging || window.innerWidth >= 1024) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    inner.style.transform = '';
+
+    if (dx < -THRESHOLD) {
+      inner.classList.add('snapped');
+      wrap.classList.add('swiping');
+      resetAll(wrap);
+    } else {
+      inner.classList.remove('snapped');
+      wrap.classList.remove('swiping');
+    }
+    dragging = false;
+  }, { passive: true });
+
+  // tap on the red bg to confirm delete
+  document.addEventListener('click', e => {
+    const bg = e.target.closest('.tx-swipe-bg');
+    if (!bg) return;
+    const w = bg.closest('.tx-swipe-wrap');
+    if (!w) return;
+    const id = w.dataset.id;
+    if (id) delTx(id);
+  });
+})();
 </script>
 </body>
 </html>
