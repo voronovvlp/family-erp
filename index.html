@@ -203,10 +203,10 @@ input, textarea, select { font-family: inherit; }
     align-items: start;
   }
 
-  /* modal: positioned from top, scrollable */
+/* modal: positioned from top, scrollable */
   .modal-overlay {
     align-items: flex-start;
-    padding-top: 6vh;
+    padding: 5vh 16px 5vh;
   }
   .modal {
     border-radius: var(--r-xl);
@@ -215,6 +215,7 @@ input, textarea, select { font-family: inherit; }
     box-shadow: 0 32px 96px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.05);
     margin: 0 auto;
     border-top: none;
+    width: 100%;
   }
   .modal__handle { display: none; }
 
@@ -342,6 +343,7 @@ input, textarea, select { font-family: inherit; }
   font-weight: 600;
 }
 .sidebar-nav__btn.is-disabled { opacity: .22; cursor: not-allowed; }
+.sidebar-nav__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-nav__badge {
   font-size: 9px;
   background: var(--c-surface2);
@@ -1050,6 +1052,10 @@ textarea { resize: none; height: 54px; }
   gap: 10px;
   flex-wrap: wrap;
 }
+.balance-card__period-lbl {
+  font-size: 11px;
+  color: var(--c-txt3);
+}
 @media (min-width: 1024px) {
   .balance-card { padding: 26px 26px 22px; margin-bottom: 20px; }
   .balance-card__value { font-size: 44px; }
@@ -1094,20 +1100,19 @@ textarea { resize: none; height: 54px; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--c-green);
-  color: #000;
-  border: none;
+  padding: 13px 15px;
+  background: var(--c-surface2);
+  color: var(--c-txt);
+  border: 1px solid var(--c-line2);
   border-radius: var(--r-lg);
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  transition: opacity .18s, transform .12s;
-  letter-spacing: -.1px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 7px;
+  transition: background .18s, border-color .18s;
 }
-.cta-btn:hover { opacity: .88; transform: translateY(-1px); }
+.cta-btn:hover { background: var(--c-surface3); border-color: rgba(255,255,255,.2); }
 .cta-btn:active { transform: scale(.98); }
-.cta-btn__arrow { opacity: .6; font-size: 16px; }
+.cta-btn__arrow { color: var(--c-txt3); font-size: 14px; }
 
 /* tx list section on home */
 .home-tx-section {
@@ -1122,6 +1127,60 @@ textarea { resize: none; height: 54px; }
   .home-tx-section { padding: 22px; }
 }
 
+/* ═══════════════════════════════════════
+   PIE CHART — RANGE SELECTOR
+═══════════════════════════════════════ */
+.pie-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.pie-range-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--c-line2);
+  background: var(--c-surface2);
+  color: var(--c-txt2);
+  font-size: 16px;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background .18s, color .18s;
+}
+.pie-range-btn:hover { background: var(--c-surface3); color: var(--c-txt); }
+.pie-range-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--c-surface2);
+  border-radius: 50px;
+  padding: 3px;
+}
+.pie-rtab {
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--c-txt3);
+  transition: background .18s, color .18s;
+}
+.pie-rtab.is-active {
+  background: var(--c-surface3);
+  color: var(--c-txt);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.pie-rtab:hover:not(.is-active) { color: var(--c-txt2); }
+.pie-range-label {
+  flex: 1;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-txt2);
+  white-space: nowrap;
+}
 
 </style>
 </head>
@@ -1142,7 +1201,7 @@ textarea { resize: none; height: 54px; }
       <span class="icon">📊</span>Сводка
     </button>
     <button class="sidebar-nav__btn" onclick="go('add')" id="dnav-add">
-      <span class="icon">➕</span>Добавить
+      <span class="icon">➕</span><span class="sidebar-nav__label">Добавить расход/доход</span>
     </button>
     <button class="sidebar-nav__btn" onclick="go('list')" id="dnav-list">
       <span class="icon">📋</span>Операции
@@ -1202,11 +1261,11 @@ textarea { resize: none; height: 54px; }
         <div class="balance-card__value" id="balance-val">₽ 0</div>
         <div class="balance-card__meta">
           <div id="balance-delta"></div>
-          <span style="font-size:11px;color:var(--c-txt3)" id="balance-period-lbl">Текущий месяц</span>
+          <span class="balance-card__period-lbl" id="balance-period-lbl">Текущий месяц</span>
         </div>
       </div>
 
-      <!-- PERIOD SWITCHER + 2 STAT CARDS -->
+      <!-- PERIOD SWITCHER + 2 STAT CARDS — always visible -->
       <div class="period-switcher">
         <button class="period-btn is-active" id="period-today" onclick="setPeriod('today')">Сегодня</button>
         <button class="period-btn" id="period-month" onclick="setPeriod('month')">Месяц</button>
@@ -1384,6 +1443,17 @@ textarea { resize: none; height: 54px; }
     <div class="modal__header">
       <h2 class="modal__title">🥧 Круговая диаграмма</h2>
       <button class="modal__close" onclick="closeAnalytics()">✕</button>
+    </div>
+    <!-- period range row -->
+    <div class="pie-range-row">
+      <button class="pie-range-btn" id="pie-prev" onclick="pieMonthShift(-1)">‹</button>
+      <div class="pie-range-tabs">
+        <button class="pie-rtab is-active" id="pie-r1" onclick="setPieRange(1)">1 мес</button>
+        <button class="pie-rtab" id="pie-r3" onclick="setPieRange(3)">3 мес</button>
+        <button class="pie-rtab" id="pie-r12" onclick="setPieRange(12)">Год</button>
+      </div>
+      <span class="pie-range-label" id="pie-range-label">апр 2026</span>
+      <button class="pie-range-btn" id="pie-next" onclick="pieMonthShift(1)">›</button>
     </div>
     <div class="pie-chips">
       <button class="chip is-red" id="ptab-exp" onclick="setPie('type','expense')">💸 Расходы</button>
@@ -1940,6 +2010,52 @@ window.addCat = async function() {
 };
 
 /* ── PIE CHART ── */
+// pie state: type/who already in S.pie; add range
+S.pie.range  = 1;   // months: 1, 3, 12
+S.pie.offset = 0;   // month offset from current (0 = current, -1 = prev, etc.)
+
+function pieGetMonths() {
+  const months = [];
+  const now = new Date();
+  for (let i = 0; i < S.pie.range; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + S.pie.offset - i, 1);
+    months.push(d.toISOString().slice(0,7));
+  }
+  return months;
+}
+function pieUpdateRangeLabel() {
+  const RU_MO = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  const months = pieGetMonths();
+  const lbl = el('pie-range-label');
+  if (!lbl) return;
+  if (months.length === 1) {
+    const [y,m] = months[0].split('-');
+    lbl.textContent = RU_MO[parseInt(m)-1] + ' ' + y;
+  } else {
+    const first = months[months.length-1], last = months[0];
+    const [y1,m1] = first.split('-'); const [y2,m2] = last.split('-');
+    lbl.textContent = RU_MO[parseInt(m1)-1] + (y1!==y2?' '+y1:'') + ' — ' + RU_MO[parseInt(m2)-1] + ' ' + y2;
+  }
+  // disable next if already at current month
+  const nextBtn = el('pie-next');
+  if (nextBtn) nextBtn.disabled = S.pie.offset >= 0;
+}
+
+window.setPieRange = function(r) {
+  S.pie.range = r; S.pie.offset = 0;
+  ['1','3','12'].forEach(n => {
+    const b = el('pie-r'+n);
+    if (b) b.classList.toggle('is-active', parseInt(n) === r);
+  });
+  pieUpdateRangeLabel(); drawPie();
+};
+window.pieMonthShift = function(d) {
+  const newOff = S.pie.offset + d;
+  if (newOff > 0) return; // can't go into future
+  S.pie.offset = newOff;
+  pieUpdateRangeLabel(); drawPie();
+};
+
 window.setPie = function(k, v) {
   S.pie[k] = v;
   if (k === 'type') {
@@ -1955,19 +2071,24 @@ window.setPie = function(k, v) {
 };
 window.openAnalytics = function() {
   el('modal-analytics').classList.add('is-open');
-  S.pie = { type:'expense', who:'all' };
+  S.pie = { type:'expense', who:'all', range:1, offset:0 };
   el('ptab-exp').className  = 'chip is-red';
   el('ptab-inc').className  = 'chip';
   el('ptab-all').className  = 'chip is-white';
   el('ptab-vova').className = 'chip';
   el('ptab-yulia').className= 'chip';
+  ['1','3','12'].forEach(n => {
+    const b = el('pie-r'+n); if (b) b.classList.toggle('is-active', n==='1');
+  });
+  pieUpdateRangeLabel();
   drawPie();
 };
 window.closeAnalytics = () => el('modal-analytics').classList.remove('is-open');
 
 function drawPie() {
-  const canvas = el('pie-canvas'), ctx = canvas.getContext('2d'), mo = todayS().slice(0,7);
-  let txs = S.txs.filter(t => t.type === S.pie.type && t.date.startsWith(mo));
+  const canvas = el('pie-canvas'), ctx = canvas.getContext('2d');
+  const months = pieGetMonths();
+  let txs = S.txs.filter(t => t.type === S.pie.type && months.some(mo => t.date.startsWith(mo)));
   if (S.pie.who !== 'all') txs = txs.filter(t => t.by === S.pie.who);
   const tots = {};
   txs.forEach(tx => { tots[tx.cat] = (tots[tx.cat]||0) + tx.amount; });
@@ -1975,8 +2096,8 @@ function drawPie() {
   const total = entries.reduce((s,[,v]) => s+v, 0);
   ctx.clearRect(0,0,200,200);
   if (!entries.length) {
-    ctx.fillStyle='#444'; ctx.font='13px Inter,sans-serif'; ctx.textAlign='center';
-    ctx.fillText('Нет данных за месяц',100,105);
+    ctx.fillStyle='#555'; ctx.font='13px Inter,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Нет данных',100,100); ctx.fillText('за выбранный период',100,118);
     el('pie-legend').innerHTML=''; return;
   }
   let angle = -Math.PI/2;
@@ -1985,9 +2106,11 @@ function drawPie() {
     ctx.beginPath(); ctx.moveTo(100,100); ctx.arc(100,100,90,angle,angle+sl); ctx.closePath();
     ctx.fillStyle = PAL[i%PAL.length]; ctx.fill(); angle += sl;
   });
-  ctx.beginPath(); ctx.arc(100,100,48,0,Math.PI*2); ctx.fillStyle='#111118'; ctx.fill();
-  ctx.fillStyle='#666'; ctx.font='600 12px Inter,sans-serif'; ctx.textAlign='center';
-  ctx.fillText(fmtN(total),100,97); ctx.font='10px Inter,sans-serif'; ctx.fillText('за месяц',100,112);
+  ctx.beginPath(); ctx.arc(100,100,48,0,Math.PI*2);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--c-surface').trim() || '#111117';
+  ctx.fill();
+  ctx.fillStyle='#777'; ctx.font='600 11px Inter,sans-serif'; ctx.textAlign='center';
+  ctx.fillText(fmtN(total),100,96); ctx.font='10px Inter,sans-serif'; ctx.fillText('итого',100,111);
   el('pie-legend').innerHTML = entries.map(([cid,val],i) => {
     const cat=getC(cid), pct=Math.round(val/total*100);
     return `<div class="pie-legend-row">
