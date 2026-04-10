@@ -154,12 +154,12 @@ input, textarea, select { font-family: inherit; }
     padding: 22px;
   }
 
-  /* home stats: 2+2 on mobile, 4-col on desktop */
+  /* home stats: always 2-col (period switcher handles today/month) */
   .stats-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: 1fr 1fr;
     gap: 14px;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
   .stats-row + .section-lbl { display: none; }
 
@@ -1003,6 +1003,125 @@ textarea { resize: none; height: 54px; }
 .hint-list li { font-size: 13px; color: var(--c-txt3); line-height: 1.55; display: flex; gap: 8px; }
 .hint-list li strong { color: var(--c-txt2); font-weight: 500; }
 
+/* ═══════════════════════════════════════
+   DASHBOARD — BALANCE CARD
+═══════════════════════════════════════ */
+.balance-card {
+  border-radius: var(--r-xl);
+  padding: 22px 22px 20px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.balance-card::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  background: var(--c-green);
+  opacity: .04;
+  filter: blur(40px);
+  pointer-events: none;
+}
+.balance-card__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-txt3);
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  margin-bottom: 6px;
+}
+.balance-card__value {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -1.2px;
+  line-height: 1;
+  color: var(--c-txt);
+  margin-bottom: 10px;
+}
+.balance-card__value--pos { color: var(--c-green); }
+.balance-card__value--neg { color: var(--c-red); }
+.balance-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+@media (min-width: 1024px) {
+  .balance-card { padding: 26px 26px 22px; margin-bottom: 20px; }
+  .balance-card__value { font-size: 44px; }
+}
+
+/* ═══════════════════════════════════════
+   DASHBOARD — PERIOD SWITCHER
+═══════════════════════════════════════ */
+.period-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--c-surface2);
+  border-radius: 50px;
+  padding: 3px;
+  width: fit-content;
+  margin-bottom: 12px;
+}
+.period-btn {
+  padding: 5px 14px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--c-txt3);
+  transition: background .18s, color .18s;
+  letter-spacing: .01em;
+}
+.period-btn.is-active {
+  background: var(--c-surface3);
+  color: var(--c-txt);
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.period-btn:hover:not(.is-active) { color: var(--c-txt2); }
+
+/* ═══════════════════════════════════════
+   DASHBOARD — ASIDE CTA
+═══════════════════════════════════════ */
+.cta-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--c-green);
+  color: #000;
+  border: none;
+  border-radius: var(--r-lg);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  transition: opacity .18s, transform .12s;
+  letter-spacing: -.1px;
+}
+.cta-btn:hover { opacity: .88; transform: translateY(-1px); }
+.cta-btn:active { transform: scale(.98); }
+.cta-btn__arrow { opacity: .6; font-size: 16px; }
+
+/* tx list section on home */
+.home-tx-section {
+  background: var(--c-surface);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--c-line);
+  padding: 18px;
+  margin-top: 4px;
+}
+.home-tx-section .section-lbl { margin-top: 0; margin-bottom: 12px; }
+@media (min-width: 1024px) {
+  .home-tx-section { padding: 22px; }
+}
+
 
 </style>
 </head>
@@ -1077,36 +1196,33 @@ textarea { resize: none; height: 54px; }
     <div class="screen" id="screen-home">
       <div class="err-banner" id="err-banner"></div>
 
-      <!-- Stats — mobile: two 2-col grids | desktop: one 4-col row via CSS -->
-      <p class="section-lbl section-lbl--first">Сегодня</p>
-      <div class="stats-row">
-        <div class="stat-card stat-card--inc">
-          <div class="stat-card__glow"></div>
-          <div class="stat-card__label">Доходы</div>
-          <div class="stat-card__value stat-card__value--inc" id="today-inc">₽ 0</div>
-          <div id="d-ti"></div>
-        </div>
-        <div class="stat-card stat-card--exp">
-          <div class="stat-card__glow"></div>
-          <div class="stat-card__label">Расходы</div>
-          <div class="stat-card__value stat-card__value--exp" id="today-exp">₽ 0</div>
-          <div id="d-te"></div>
+      <!-- BALANCE CARD -->
+      <div class="balance-card">
+        <div class="balance-card__label">Баланс за месяц</div>
+        <div class="balance-card__value" id="balance-val">₽ 0</div>
+        <div class="balance-card__meta">
+          <div id="balance-delta"></div>
+          <span style="font-size:11px;color:var(--c-txt3)" id="balance-period-lbl">Текущий месяц</span>
         </div>
       </div>
 
-      <p class="section-lbl">Этот месяц</p>
+      <!-- PERIOD SWITCHER + 2 STAT CARDS -->
+      <div class="period-switcher">
+        <button class="period-btn is-active" id="period-today" onclick="setPeriod('today')">Сегодня</button>
+        <button class="period-btn" id="period-month" onclick="setPeriod('month')">Месяц</button>
+      </div>
       <div class="stats-row">
         <div class="stat-card stat-card--inc">
           <div class="stat-card__glow"></div>
           <div class="stat-card__label">Доходы</div>
-          <div class="stat-card__value stat-card__value--inc" id="month-inc">₽ 0</div>
-          <div id="d-mi"></div>
+          <div class="stat-card__value stat-card__value--inc" id="period-inc">₽ 0</div>
+          <div id="d-period-inc"></div>
         </div>
         <div class="stat-card stat-card--exp">
           <div class="stat-card__glow"></div>
           <div class="stat-card__label">Расходы</div>
-          <div class="stat-card__value stat-card__value--exp" id="month-exp">₽ 0</div>
-          <div id="d-me"></div>
+          <div class="stat-card__value stat-card__value--exp" id="period-exp">₽ 0</div>
+          <div id="d-period-exp"></div>
         </div>
       </div>
 
@@ -1119,17 +1235,19 @@ textarea { resize: none; height: 54px; }
       <!-- desktop: two-col layout -->
       <div class="home-layout">
         <div class="home-layout__main">
-          <p class="section-lbl mt-0">Последние операции</p>
-          <div class="tx-list" id="home-txlist"></div>
+          <div class="home-tx-section">
+            <p class="section-lbl">Последние операции</p>
+            <div class="tx-list" id="home-txlist"></div>
+          </div>
         </div>
         <div class="home-layout__aside desktop-only">
-          <p class="panel-label">Быстрый доступ</p>
+          <p class="panel-label">Действия</p>
+          <button class="cta-btn" onclick="go('add')">
+            <span>➕ Добавить операцию</span>
+            <span class="cta-btn__arrow">→</span>
+          </button>
           <button class="quick-btn" onclick="openAnalytics()">
             <span class="quick-btn__left">🥧 Диаграмма</span>
-            <span class="quick-btn__arrow">→</span>
-          </button>
-          <button class="quick-btn quick-btn--green" onclick="go('add')">
-            <span class="quick-btn__left">➕ Добавить расход / доход</span>
             <span class="quick-btn__arrow">→</span>
           </button>
           <button class="quick-btn" onclick="go('list')">
@@ -1673,6 +1791,14 @@ function renderDelta(elId, cur, prev, type, suffix) {
 }
 
 /* ── HOME ── */
+let _period = 'today'; // 'today' | 'month'
+window.setPeriod = function(p) {
+  _period = p;
+  el('period-today').classList.toggle('is-active', p === 'today');
+  el('period-month').classList.toggle('is-active', p === 'month');
+  rHome();
+};
+
 function rHome() {
   const tod = todayS(), yes = yestS(), mo = tod.slice(0,7);
   const lm = new Date(); lm.setMonth(lm.getMonth()-1); const lmStr = lm.toISOString().slice(0,7);
@@ -1681,13 +1807,42 @@ function rHome() {
     if (tx.date===tod) { tx.type==='income' ? ti+=tx.amount : te+=tx.amount; }
     if (tx.date===yes) { tx.type==='income' ? yi+=tx.amount : ye+=tx.amount; }
     if (tx.date.startsWith(mo))   { tx.type==='income' ? mi+=tx.amount : me+=tx.amount; }
-    if (tx.date.startsWith(lmStr)){ tx.type==='income' ? lmi+=tx.amount: lme+=tx.amount; }
+    if (tx.date.startsWith(lmStr)){ tx.type==='income' ? lmi+=tx.amount : lme+=tx.amount; }
   });
-  el('today-inc').textContent = fmtN(ti); el('today-exp').textContent = fmtN(te);
-  el('month-inc').textContent = fmtN(mi); el('month-exp').textContent = fmtN(me);
-  renderDelta('d-ti',ti,yi,'income','к вчера');   renderDelta('d-te',te,ye,'expense','к вчера');
-  renderDelta('d-mi',mi,lmi,'income','к пр.мес.'); renderDelta('d-me',me,lme,'expense','к пр.мес.');
-  const limit = window.innerWidth >= 1024 ? 8 : 5;
+
+  // Balance card — always shows month balance
+  const bal = mi - me;
+  const lmBal = lmi - lme;
+  const bv = el('balance-val');
+  bv.textContent = fmtN(bal);
+  bv.className = 'balance-card__value' + (bal > 0 ? ' balance-card__value--pos' : bal < 0 ? ' balance-card__value--neg' : '');
+
+  // Balance delta vs last month
+  const bd = el('balance-delta');
+  if (bd) {
+    const diff = bal - lmBal;
+    if (Math.abs(diff) < 0.5) {
+      bd.innerHTML = `<span class="delta delta--muted">= как в прошлом</span>`;
+    } else {
+      const sign = diff > 0 ? '▲ ' : '▼ ';
+      const mod  = diff > 0 ? 'good' : 'bad';
+      bd.innerHTML = `<span class="delta delta--${mod}">${sign}${fmtN(Math.abs(diff))} vs прошлый месяц</span>`;
+    }
+  }
+
+  // Period cards
+  const inc = _period === 'today' ? ti : mi;
+  const exp = _period === 'today' ? te : me;
+  const pInc = _period === 'today' ? yi : lmi;
+  const pExp = _period === 'today' ? ye : lme;
+  const suffix = _period === 'today' ? 'к вчера' : 'к пр.мес.';
+
+  el('period-inc').textContent = fmtN(inc);
+  el('period-exp').textContent = fmtN(exp);
+  renderDelta('d-period-inc', inc, pInc, 'income', suffix);
+  renderDelta('d-period-exp', exp, pExp, 'expense', suffix);
+
+  const limit = window.innerWidth >= 1024 ? 8 : 6;
   el('home-txlist').innerHTML = S.txs.slice(0,limit).length
     ? S.txs.slice(0,limit).map(t => txHTML(t, false)).join('')
     : '<div class="empty"><div class="empty__icon">💸</div>Пока нет операций<br><span class="empty__hint">Добавь первую — займёт 3 секунды 👇</span></div>';
