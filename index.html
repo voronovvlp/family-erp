@@ -1221,6 +1221,357 @@ textarea { resize: none; height: 54px; }
   white-space: nowrap;
 }
 
+/* ═══════════════════════════════════════
+   CALENDAR MODULE
+═══════════════════════════════════════ */
+
+/* Calendar layout */
+.cal-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+@media (min-width: 1024px) {
+  .cal-layout {
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+/* Month navigation header */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.cal-header__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  color: var(--c-txt);
+}
+.cal-nav-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-txt2);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .18s, color .18s;
+}
+.cal-nav-btn:hover { background: var(--c-surface2); color: var(--c-txt); }
+.cal-today-btn {
+  padding: 5px 12px;
+  border-radius: 50px;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-txt2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background .18s, color .18s;
+}
+.cal-today-btn:hover { background: var(--c-surface2); color: var(--c-txt); }
+
+/* Weekday labels */
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-txt3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 4px 0;
+}
+
+/* Calendar grid */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-cell {
+  min-height: 72px;
+  border-radius: var(--r-sm);
+  padding: 5px 4px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.cal-cell:hover { background: var(--c-surface); border-color: var(--c-line); }
+.cal-cell.is-other-month { opacity: .35; }
+.cal-cell.is-today .cal-day-num {
+  background: var(--c-green);
+  color: #000;
+  border-radius: 50%;
+}
+.cal-cell.is-selected { background: var(--c-surface2); border-color: var(--c-line2); }
+.cal-day-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-txt2);
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  margin-bottom: 3px;
+  flex-shrink: 0;
+}
+.cal-cell.is-today .cal-day-num { color: #000; font-weight: 700; }
+
+/* Event pills in cell */
+.cal-event-pill {
+  width: 100%;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.cal-event-pill:hover { opacity: .8; }
+.cal-event-pill--vova  { background: rgba(59,130,246,.2); color: #3B82F6; }
+.cal-event-pill--yulia { background: rgba(232,53,106,.2); color: #E8356A; }
+.cal-event-pill--both  { background: rgba(46,204,82,.15); color: #2ECC52; }
+
+.cal-more-link {
+  font-size: 9px;
+  color: var(--c-txt3);
+  padding: 0 4px;
+  cursor: pointer;
+}
+.cal-more-link:hover { color: var(--c-txt2); }
+
+@media (max-width: 600px) {
+  .cal-cell { min-height: 52px; padding: 3px 2px 2px; }
+  .cal-day-num { font-size: 11px; width: 20px; height: 20px; }
+  .cal-event-pill { display: none; }
+  .cal-cell.has-events::after {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--c-green);
+    position: absolute;
+    bottom: 4px; right: 4px;
+  }
+}
+
+/* Day detail panel (desktop aside / mobile bottom sheet) */
+.cal-aside {
+  background: var(--c-surface);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--c-line);
+  padding: 20px;
+  position: sticky;
+  top: 28px;
+}
+.cal-aside__date {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.2px;
+  margin-bottom: 14px;
+  color: var(--c-txt);
+}
+.cal-aside__empty {
+  font-size: 13px;
+  color: var(--c-txt3);
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* Event list in aside/sheet */
+.cal-event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--c-surface2);
+  border: 1px solid transparent;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.cal-event-item:last-child { margin-bottom: 0; }
+.cal-event-item:hover { background: var(--c-surface3); border-color: var(--c-line); }
+.cal-event-color {
+  width: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: 20px;
+}
+.cal-event-body { flex: 1; min-width: 0; }
+.cal-event-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-txt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-event-time {
+  font-size: 11px;
+  color: var(--c-txt3);
+  margin-top: 2px;
+}
+.cal-event-who {
+  font-size: 10px;
+  color: var(--c-txt3);
+  margin-top: 2px;
+}
+.cal-event-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Mobile day drawer */
+.cal-drawer {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.cal-drawer.is-open { display: block; }
+.cal-drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(3px);
+}
+.cal-drawer__panel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--c-surface);
+  border-radius: 22px 22px 0 0;
+  padding: 10px 20px 40px;
+  max-height: 75vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--c-line2);
+}
+.cal-drawer__handle {
+  width: 32px; height: 3.5px;
+  background: var(--c-line2);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+/* Add event button */
+.cal-add-btn {
+  width: 100%;
+  padding: 11px;
+  background: var(--c-surface2);
+  color: var(--c-txt2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background .18s, color .18s;
+  margin-top: 12px;
+}
+.cal-add-btn:hover { background: var(--c-surface3); color: var(--c-txt); border-color: var(--c-line2); }
+
+/* View switcher */
+.cal-view-switcher {
+  display: flex;
+  gap: 2px;
+  background: var(--c-surface2);
+  border-radius: 50px;
+  padding: 3px;
+}
+.cal-view-btn {
+  padding: 5px 12px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--c-txt3);
+  transition: background .18s, color .18s;
+}
+.cal-view-btn.is-active {
+  background: var(--c-surface3);
+  color: var(--c-txt);
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.cal-view-btn:hover:not(.is-active) { color: var(--c-txt2); }
+
+/* Week view */
+.cal-week-view {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-week-col {
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  min-height: 120px;
+}
+.cal-week-col:hover { background: var(--c-surface); border-color: var(--c-line); }
+.cal-week-col.is-selected { background: var(--c-surface2); border-color: var(--c-line2); }
+.cal-week-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 2px;
+}
+.cal-week-wd {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-txt3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.cal-week-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-txt2);
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+}
+.cal-week-num.is-today-num { background: var(--c-green); color: #000; }
+.cal-week-events { display: flex; flex-direction: column; gap: 2px; }
+
+/* Day view */
+.cal-day-list { padding: 4px 0; }
+.cal-day-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--c-txt3);
+  font-size: 13px;
+  line-height: 2;
+}
+.cal-day-empty .empty__icon { font-size: 36px; margin-bottom: 10px; display: block; }
+
+/* Hide weekdays in week/day view */
+.cal-grid:empty + .cal-weekdays { display: none; }
+
 </style>
 </head>
 <body>
@@ -1249,9 +1600,8 @@ textarea { resize: none; height: 54px; }
       <span class="icon">✅</span>Задачи
       <span class="sidebar-nav__badge">скоро</span>
     </button>
-    <button class="sidebar-nav__btn is-disabled" onclick="soon('Календарь')">
+    <button class="sidebar-nav__btn" onclick="go('calendar')" id="dnav-calendar">
       <span class="icon">📅</span>Календарь
-      <span class="sidebar-nav__badge">скоро</span>
     </button>
     <button class="sidebar-nav__btn" onclick="go('settings')" id="dnav-settings">
       <span class="icon">⚙️</span>Настройки
@@ -1275,7 +1625,7 @@ textarea { resize: none; height: 54px; }
       <button class="mobile-nav__btn" onclick="go('add')" id="mnav-add"><span class="icon">➕</span>Добавить</button>
       <button class="mobile-nav__btn" onclick="go('list')" id="mnav-list"><span class="icon">📋</span>Операции</button>
       <button class="mobile-nav__btn is-disabled" onclick="soon('Задачи')"><span class="icon">✅</span>Задачи<span class="nav-badge">скоро</span></button>
-      <button class="mobile-nav__btn is-disabled" onclick="soon('Кал-рь')"><span class="icon">📅</span>Кал-рь<span class="nav-badge">скоро</span></button>
+      <button class="mobile-nav__btn" onclick="go('calendar')" id="mnav-calendar"><span class="icon">📅</span>Кал-рь</button>
       <button class="mobile-nav__btn" onclick="go('settings')" id="mnav-settings"><span class="icon">⚙️</span>Настройки</button>
     </nav>
 
@@ -1470,8 +1820,127 @@ textarea { resize: none; height: 54px; }
       </div>
     </div>
 
+    <!-- ══════════════════════════════
+         SCREEN: CALENDAR
+    ══════════════════════════════ -->
+    <div class="screen" id="screen-calendar">
+      <div class="cal-layout">
+
+        <!-- LEFT: Month grid -->
+        <div class="cal-main">
+          <div class="cal-header">
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="cal-nav-btn" onclick="calShiftMonth(-1)">‹</button>
+              <button class="cal-nav-btn" onclick="calShiftMonth(1)">›</button>
+              <h2 class="cal-header__title" id="cal-month-title">Апрель 2026</h2>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="cal-view-switcher">
+                <button class="cal-view-btn is-active" id="calv-month" onclick="calSetView('month')">Месяц</button>
+                <button class="cal-view-btn" id="calv-week" onclick="calSetView('week')">Неделя</button>
+                <button class="cal-view-btn" id="calv-day" onclick="calSetView('day')">День</button>
+              </div>
+              <button class="cal-today-btn" onclick="calGoToday()">Сегодня</button>
+            </div>
+          </div>
+          <div id="cal-weekdays-row" class="cal-weekdays">
+            <div class="cal-weekday">Пн</div>
+            <div class="cal-weekday">Вт</div>
+            <div class="cal-weekday">Ср</div>
+            <div class="cal-weekday">Чт</div>
+            <div class="cal-weekday">Пт</div>
+            <div class="cal-weekday">Сб</div>
+            <div class="cal-weekday">Вс</div>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+
+        <!-- RIGHT: Day detail (desktop only) -->
+        <div class="cal-aside desktop-only" id="cal-aside">
+          <div class="cal-aside__date" id="cal-aside-date">Выберите день</div>
+          <div id="cal-aside-events">
+            <div class="cal-aside__empty">Нажмите на день чтобы увидеть события</div>
+          </div>
+          <button class="cal-add-btn" id="cal-add-btn" onclick="openCalEventModal()" style="display:none">
+            ＋ Добавить событие
+          </button>
+        </div>
+
+      </div>
+    </div>
+
   </div><!-- /.layout__main -->
 </div><!-- /.layout -->
+
+<!-- ══════════════════════════════════
+     CALENDAR: MOBILE DAY DRAWER
+══════════════════════════════════ -->
+<div class="cal-drawer" id="cal-drawer">
+  <div class="cal-drawer__backdrop" onclick="closeCalDrawer()"></div>
+  <div class="cal-drawer__panel">
+    <div class="cal-drawer__handle"></div>
+    <div class="cal-aside__date" id="cal-drawer-date">День</div>
+    <div id="cal-drawer-events"></div>
+    <button class="cal-add-btn" onclick="openCalEventModal()">＋ Добавить событие</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     CALENDAR: EVENT MODAL (create/edit)
+══════════════════════════════════ -->
+<div class="modal-overlay" id="modal-cal-event">
+  <div class="modal">
+    <div class="modal__handle"></div>
+    <div class="modal__header">
+      <h2 class="modal__title" id="cal-modal-title">Новое событие</h2>
+      <button class="modal__close" onclick="closeCalEventModal()">✕</button>
+    </div>
+    <div class="modal-form">
+      <div>
+        <p class="modal-field-label">Название</p>
+        <input type="text" id="cal-ev-title" placeholder="Название события...">
+      </div>
+      <div>
+        <p class="modal-field-label">Участники</p>
+        <div class="chips">
+          <button class="chip is-blue" id="cal-part-vova" onclick="calToggleParticipant('vova')">🙋‍♂️ Вова</button>
+          <button class="chip" id="cal-part-yulia" onclick="calToggleParticipant('yulia')">🙋‍♀️ Юля</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <p class="modal-field-label">Начало</p>
+          <input type="datetime-local" id="cal-ev-start">
+        </div>
+        <div style="flex:1">
+          <p class="modal-field-label">Конец</p>
+          <input type="datetime-local" id="cal-ev-end">
+        </div>
+      </div>
+      <div>
+        <p class="modal-field-label" style="margin-bottom:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:10px;font-weight:600;color:var(--c-txt3);text-transform:uppercase;letter-spacing:.10em">
+            <input type="checkbox" id="cal-ev-allday" onchange="calToggleAllDay()">
+            Весь день
+          </label>
+        </p>
+      </div>
+      <div>
+        <p class="modal-field-label">Место</p>
+        <input type="text" id="cal-ev-location" placeholder="Необязательно...">
+      </div>
+      <div>
+        <p class="modal-field-label">Описание</p>
+        <textarea id="cal-ev-desc" class="textarea--sm" placeholder="Необязательно..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeCalEventModal()">Отмена</button>
+        <button class="btn-confirm-ok" id="cal-modal-del-btn" onclick="calDeleteFromModal()" style="display:none;padding:13px 16px;font-size:14px;border-radius:var(--r-md)">🗑 Удалить</button>
+        <button class="btn-modal-save" onclick="saveCalEvent()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════
      MODAL: ANALYTICS
@@ -1730,16 +2199,16 @@ function getC(id) { return S.cats.find(x => x.id === id); }
 /* ── NAV — class-based, no style mutations ── */
 function setNav(name) {
   // mobile
-  ['home','add','list','settings'].forEach(n => {
+  ['home','add','list','settings','calendar'].forEach(n => {
     el('mnav-'+n)?.classList.toggle('is-active', n === name);
   });
   // desktop
-  ['home','add','list','settings'].forEach(n => {
+  ['home','add','list','settings','calendar'].forEach(n => {
     el('dnav-'+n)?.classList.toggle('is-active', n === name);
   });
 }
 
-const TITLES = { home:'Сводка', add:'Добавить', list:'Операции', settings:'Настройки' };
+const TITLES = { home:'Сводка', add:'Добавить', list:'Операции', settings:'Настройки', calendar:'Календарь' };
 
 window.go = function(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
@@ -1750,6 +2219,7 @@ window.go = function(name) {
   if (name === 'home')     rHome();
   if (name === 'list')     { updateFilterUI(); rList(); }
   if (name === 'settings') rSettings();
+  if (name === 'calendar') calInit();
   if (name === 'add') {
     S.selCat = null; rChips();
     el('curr-sym').textContent = getCurr().sym;
@@ -2177,6 +2647,613 @@ function drawPie() {
     </div>`;
   }).join('');
 }
+
+/* ════════════════════════════════════════════════════════
+   CALENDAR MODULE
+════════════════════════════════════════════════════════ */
+
+// Member IDs from seed
+const MEMBER_IDS = {
+  vova:  'a1000000-0000-0000-0000-000000000001',
+  yulia: 'a2000000-0000-0000-0000-000000000002',
+};
+const MEMBER_COLORS = { vova: '#3B82F6', yulia: '#E8356A', both: '#2ECC52' };
+const RU_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                   'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const RU_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня',
+                       'июля','августа','сентября','октября','ноября','декабря'];
+const RU_WEEKDAYS_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+// Calendar state
+let CAL = {
+  year:  new Date().getFullYear(),
+  month: new Date().getMonth(), // 0-based
+  view: 'month',  // 'month' | 'week' | 'day'
+  weekStart: null, // Date object — Monday of current week
+  dayDate: null,   // Date object — current day view
+  events: [],
+  selDate: null,
+  editId: null,
+  participants: { vova: true, yulia: false },
+};
+
+/* ── LOCAL DATE HELPERS ── */
+// Convert UTC ISO string → local YYYY-MM-DD
+function calLocalDate(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Convert UTC ISO string → local HH:MM
+function calLocalTime(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+// Convert UTC ISO string → datetime-local input value (YYYY-MM-DDTHH:MM)
+function calToInputLocal(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return `${calLocalDate(isoStr)}T${calLocalTime(isoStr)}`;
+}
+
+/* ── INIT ── */
+async function calInit() {
+  const now = new Date();
+  // Init weekStart to Monday of current week
+  const dow = now.getDay(); // 0=Sun
+  const mondayOff = (dow === 0) ? -6 : 1 - dow;
+  CAL.weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOff);
+  CAL.dayDate   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  await calLoadEvents();
+  calRender();
+  const todayStr = todayS();
+  const [ty,tm] = todayStr.split('-');
+  if (parseInt(ty) === CAL.year && parseInt(tm)-1 === CAL.month) {
+    calSelectDate(todayStr);
+  }
+}
+
+/* ── VIEW SWITCHER ── */
+window.calSetView = async function(v) {
+  CAL.view = v;
+  ['month','week','day'].forEach(n => {
+    el('calv-'+n)?.classList.toggle('is-active', n === v);
+  });
+  // Sync month/week/day state from selDate
+  if (CAL.selDate) {
+    const d = new Date(CAL.selDate + 'T12:00:00');
+    CAL.year  = d.getFullYear();
+    CAL.month = d.getMonth();
+    CAL.dayDate = d;
+    const dow = d.getDay();
+    const mondayOff = (dow === 0) ? -6 : 1 - dow;
+    CAL.weekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOff);
+  }
+  await calLoadEvents();
+  calRender();
+};
+
+/* ── LOAD EVENTS FROM SUPABASE ── */
+async function calLoadEvents() {
+  const startOfMonth = new Date(CAL.year, CAL.month, 1).toISOString();
+  const endOfMonth   = new Date(CAL.year, CAL.month+1, 0, 23, 59, 59).toISOString();
+  try {
+    const { data, error } = await sb
+      .from('calendar_events')
+      .select(`
+        id, title, description, start_at, end_at, is_all_day, location, status,
+        calendar_event_participants ( member_id )
+      `)
+      .eq('family_id', FID)
+      .is('deleted_at', null)
+      .eq('status', 'active')
+      .lte('start_at', endOfMonth)
+      .gte('end_at', startOfMonth)
+      .order('start_at');
+    if (error) throw error;
+    CAL.events = (data || []).map(e => ({
+      ...e,
+      participants: (e.calendar_event_participants || []).map(p => p.member_id),
+    }));
+  } catch(err) {
+    console.error('Calendar load error:', err);
+    CAL.events = [];
+  }
+}
+
+/* ── RENDER MONTH GRID ── */
+function calRender() {
+  if (CAL.view === 'week') {
+    el('cal-weekdays-row')?.style && (el('cal-weekdays-row').style.display = 'none');
+    calRenderWeek(); return;
+  }
+  if (CAL.view === 'day') {
+    el('cal-weekdays-row')?.style && (el('cal-weekdays-row').style.display = 'none');
+    calRenderDay();  return;
+  }
+  el('cal-weekdays-row')?.style && (el('cal-weekdays-row').style.display = '');
+
+  // Update title
+  el('cal-month-title').textContent = RU_MONTHS[CAL.month] + ' ' + CAL.year;
+
+  const grid = el('cal-grid');
+  if (!grid) return;
+
+  // Build day cells
+  const firstDay = new Date(CAL.year, CAL.month, 1);
+  // Monday-first: convert Sunday(0) → 6, Mon(1) → 0, etc.
+  let startDow = firstDay.getDay(); // 0=Sun
+  startDow = (startDow === 0) ? 6 : startDow - 1;
+
+  const daysInMonth    = new Date(CAL.year, CAL.month+1, 0).getDate();
+  const daysInPrevMonth = new Date(CAL.year, CAL.month, 0).getDate();
+  const todayStr = todayS();
+
+  // Build events map: LOCAL date → [events]
+  // Use calLocalDate() so UTC timestamps map to user's local day
+  const evMap = {};
+  CAL.events.forEach(ev => {
+    const d = calLocalDate(ev.start_at);
+    if (!evMap[d]) evMap[d] = [];
+    evMap[d].push(ev);
+  });
+
+  let cells = '';
+  const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i++) {
+    let day, month, year, isOther = false;
+    if (i < startDow) {
+      day = daysInPrevMonth - startDow + i + 1;
+      month = CAL.month === 0 ? 11 : CAL.month - 1;
+      year  = CAL.month === 0 ? CAL.year - 1 : CAL.year;
+      isOther = true;
+    } else if (i >= startDow + daysInMonth) {
+      day = i - startDow - daysInMonth + 1;
+      month = CAL.month === 11 ? 0 : CAL.month + 1;
+      year  = CAL.month === 11 ? CAL.year + 1 : CAL.year;
+      isOther = true;
+    } else {
+      day = i - startDow + 1;
+      month = CAL.month;
+      year  = CAL.year;
+    }
+
+    const dateStr    = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const isToday    = dateStr === todayStr;
+    const isSelected = dateStr === CAL.selDate;
+    const dayEvents  = evMap[dateStr] || [];
+    const hasEvents  = dayEvents.length > 0;
+
+    let cls = 'cal-cell';
+    if (isOther)    cls += ' is-other-month';
+    if (isToday)    cls += ' is-today';
+    if (isSelected) cls += ' is-selected';
+    if (hasEvents)  cls += ' has-events';
+
+    // Event pills (show up to 3)
+    let pillsHTML = '';
+    const MAX_PILLS = 3;
+    const shown = dayEvents.slice(0, MAX_PILLS);
+    shown.forEach(ev => {
+      const pColor = calEventColorClass(ev);
+      const t = ev.is_all_day ? 'Весь день' : calLocalDate(ev.start_at).slice(11,16) || ev.start_at.slice(11,16);
+      const tLocal = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
+      pillsHTML += `<div class="cal-event-pill cal-event-pill--${pColor}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title}">${tLocal} ${ev.title}</div>`;
+    });
+    if (dayEvents.length > MAX_PILLS) {
+      pillsHTML += `<div class="cal-more-link" onclick="calSelectDate('${dateStr}');event.stopPropagation()">+${dayEvents.length - MAX_PILLS} ещё</div>`;
+    }
+
+    cells += `<div class="${cls}" onclick="calSelectDate('${dateStr}')">
+      <div class="cal-day-num">${day}</div>
+      ${pillsHTML}
+    </div>`;
+  }
+
+  grid.innerHTML = cells;
+}
+
+function calEventColorClass(ev) {
+  const hasVova  = ev.participants.includes(MEMBER_IDS.vova);
+  const hasYulia = ev.participants.includes(MEMBER_IDS.yulia);
+  if (hasVova && hasYulia) return 'both';
+  if (hasYulia) return 'yulia';
+  return 'vova';
+}
+
+function calEventColor(ev) {
+  const cls = calEventColorClass(ev);
+  return MEMBER_COLORS[cls];
+}
+
+/* ── SELECT DATE ── */
+window.calSelectDate = function(dateStr) {
+  CAL.selDate = dateStr;
+  // Update day/week state
+  const d = new Date(dateStr + 'T12:00:00');
+  CAL.dayDate = d;
+  const dow = d.getDay();
+  const mondayOff = (dow === 0) ? -6 : 1 - dow;
+  CAL.weekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOff);
+
+  if (CAL.view === 'month') calRender();
+  else calRender();
+
+  const [y,m,dv] = dateStr.split('-');
+  const label = `${parseInt(dv)} ${RU_MONTHS_GEN[parseInt(m)-1]} ${y}`;
+  const dayEvents = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr);
+
+  if (window.innerWidth >= 1024) {
+    el('cal-aside-date').textContent = label;
+    el('cal-aside-events').innerHTML = calEventListHTML(dayEvents, true);
+    const addBtn = el('cal-add-btn');
+    if (addBtn) addBtn.style.display = 'flex';
+  } else {
+    el('cal-drawer-date').textContent = label;
+    el('cal-drawer-events').innerHTML = calEventListHTML(dayEvents, true);
+    el('cal-drawer').classList.add('is-open');
+  }
+};
+
+function calEventListHTML(events, showActions) {
+  if (!events.length) return '<div class="cal-aside__empty">Нет событий</div>';
+  return events.map(ev => {
+    const color = calEventColor(ev);
+    const startT = calLocalTime(ev.start_at);
+    const endT   = calLocalTime(ev.end_at);
+    const time = ev.is_all_day ? 'Весь день' : `${startT} – ${endT}`;
+    const who = calWhoLabel(ev);
+    const acts = showActions ? `
+      <div class="cal-event-actions">
+        <button class="tx-action-btn" onclick="calEditEvent('${ev.id}');event.stopPropagation()">✏️</button>
+        <button class="tx-action-btn tx-action-btn--del" onclick="calDeleteEvent('${ev.id}');event.stopPropagation()">🗑</button>
+      </div>` : '';
+    return `<div class="cal-event-item" onclick="calEditEvent('${ev.id}')">
+      <div class="cal-event-color" style="background:${color}"></div>
+      <div class="cal-event-body">
+        <div class="cal-event-title">${ev.title}</div>
+        <div class="cal-event-time">${time}</div>
+        <div class="cal-event-who">${who}</div>
+        ${ev.location ? `<div class="cal-event-time">📍 ${ev.location}</div>` : ''}
+      </div>
+      ${acts}
+    </div>`;
+  }).join('');
+}
+
+function calWhoLabel(ev) {
+  const hasVova  = ev.participants.includes(MEMBER_IDS.vova);
+  const hasYulia = ev.participants.includes(MEMBER_IDS.yulia);
+  if (hasVova && hasYulia) return '🙋‍♂️ Вова · 🙋‍♀️ Юля';
+  if (hasYulia) return '🙋‍♀️ Юля';
+  return '🙋‍♂️ Вова';
+}
+
+window.calClickEvent = function(e, id) {
+  e.stopPropagation();
+  calEditEvent(id);
+};
+
+/* ── NAVIGATION ── */
+window.calShiftMonth = async function(dir) {
+  if (CAL.view === 'week') {
+    CAL.weekStart = new Date(CAL.weekStart.getFullYear(), CAL.weekStart.getMonth(), CAL.weekStart.getDate() + dir * 7);
+    CAL.year  = CAL.weekStart.getFullYear();
+    CAL.month = CAL.weekStart.getMonth();
+  } else if (CAL.view === 'day') {
+    CAL.dayDate = new Date(CAL.dayDate.getFullYear(), CAL.dayDate.getMonth(), CAL.dayDate.getDate() + dir);
+    CAL.year  = CAL.dayDate.getFullYear();
+    CAL.month = CAL.dayDate.getMonth();
+    CAL.selDate = `${CAL.year}-${String(CAL.month+1).padStart(2,'0')}-${String(CAL.dayDate.getDate()).padStart(2,'0')}`;
+  } else {
+    CAL.month += dir;
+    if (CAL.month > 11) { CAL.month = 0; CAL.year++; }
+    if (CAL.month < 0)  { CAL.month = 11; CAL.year--; }
+  }
+  CAL.selDate = CAL.view === 'day' ? CAL.selDate : null;
+  await calLoadEvents();
+  calRender();
+  if (CAL.view !== 'day') {
+    const aside = el('cal-aside-events');
+    if (aside) aside.innerHTML = '<div class="cal-aside__empty">Нажмите на день чтобы увидеть события</div>';
+    const addBtn = el('cal-add-btn');
+    if (addBtn) addBtn.style.display = 'none';
+    el('cal-aside-date').textContent = 'Выберите день';
+  }
+};
+
+window.calGoToday = async function() {
+  const now = new Date();
+  CAL.year  = now.getFullYear();
+  CAL.month = now.getMonth();
+  CAL.dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dow = now.getDay();
+  const mondayOff = (dow === 0) ? -6 : 1 - dow;
+  CAL.weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOff);
+  CAL.selDate = todayS();
+  await calLoadEvents();
+  calRender();
+  calSelectDate(todayS());
+};
+
+/* ── WEEK VIEW ── */
+function calRenderWeek() {
+  const grid = el('cal-grid');
+  if (!grid) return;
+
+  const ws = CAL.weekStart;
+  const days = Array.from({length:7}, (_,i) => new Date(ws.getFullYear(), ws.getMonth(), ws.getDate()+i));
+  const startStr = `${days[0].getFullYear()}-${String(days[0].getMonth()+1).padStart(2,'0')}-${String(days[0].getDate()).padStart(2,'0')}`;
+  const endStr   = `${days[6].getFullYear()}-${String(days[6].getMonth()+1).padStart(2,'0')}-${String(days[6].getDate()).padStart(2,'0')}`;
+  el('cal-month-title').textContent = `${days[0].getDate()} – ${days[6].getDate()} ${RU_MONTHS_GEN[days[6].getMonth()]} ${days[6].getFullYear()}`;
+
+  const todayStr = todayS();
+  const evMap = {};
+  CAL.events.forEach(ev => {
+    const d = calLocalDate(ev.start_at);
+    if (!evMap[d]) evMap[d] = [];
+    evMap[d].push(ev);
+  });
+
+  const RU_WD = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  let html = `<div class="cal-week-view">`;
+  days.forEach(d => {
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === CAL.selDate;
+    const dayEvents = evMap[dateStr] || [];
+    html += `<div class="cal-week-col ${isToday?'is-today':''} ${isSelected?'is-selected':''}" onclick="calSelectDate('${dateStr}')">
+      <div class="cal-week-header">
+        <span class="cal-week-wd">${RU_WD[d.getDay()]}</span>
+        <span class="cal-week-num ${isToday?'is-today-num':''}">${d.getDate()}</span>
+      </div>
+      <div class="cal-week-events">
+        ${dayEvents.map(ev => {
+          const pc = calEventColorClass(ev);
+          const t = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
+          return `<div class="cal-event-pill cal-event-pill--${pc}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title}">${t} ${ev.title}</div>`;
+        }).join('')}
+        ${dayEvents.length === 0 ? '' : ''}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+/* ── DAY VIEW ── */
+function calRenderDay() {
+  const grid = el('cal-grid');
+  if (!grid) return;
+
+  const d = CAL.dayDate;
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const RU_WD = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  el('cal-month-title').textContent = `${RU_WD[d.getDay()]}, ${d.getDate()} ${RU_MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`;
+
+  const dayEvents = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr);
+  CAL.selDate = dateStr;
+
+  // Update aside
+  if (window.innerWidth >= 1024) {
+    const [y,m,dv] = dateStr.split('-');
+    el('cal-aside-date').textContent = `${parseInt(dv)} ${RU_MONTHS_GEN[parseInt(m)-1]} ${y}`;
+    el('cal-aside-events').innerHTML = calEventListHTML(dayEvents, true);
+    const addBtn = el('cal-add-btn');
+    if (addBtn) addBtn.style.display = 'flex';
+  }
+
+  if (!dayEvents.length) {
+    grid.innerHTML = `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этот день</div>`;
+    return;
+  }
+  grid.innerHTML = `<div class="cal-day-list">${calEventListHTML(dayEvents, true)}</div>`;
+}
+
+/* ── MOBILE DRAWER ── */
+window.closeCalDrawer = () => el('cal-drawer').classList.remove('is-open');
+
+/* ── CREATE / EDIT MODAL ── */
+window.openCalEventModal = function(prefillDate) {
+  CAL.editId = null;
+  el('cal-modal-title').textContent = 'Новое событие';
+
+  // Default date/time
+  const base = prefillDate || CAL.selDate || todayS();
+  const now = new Date();
+  const hh  = String(now.getHours()).padStart(2,'0');
+  const mm  = String(now.getMinutes()).padStart(2,'0');
+  const defaultStart = `${base}T${hh}:${mm}`;
+  const endHour = String((now.getHours()+1) % 24).padStart(2,'0');
+  const defaultEnd = `${base}T${endHour}:${mm}`;
+
+  el('cal-ev-title').value    = '';
+  el('cal-ev-start').value    = defaultStart;
+  el('cal-ev-end').value      = defaultEnd;
+  el('cal-ev-allday').checked = false;
+  el('cal-ev-location').value = '';
+  el('cal-ev-desc').value     = '';
+
+  // Participants: default Вова
+  CAL.participants = { vova: true, yulia: false };
+  calUpdateParticipantUI();
+
+  el('modal-cal-event').classList.add('is-open');
+  // Hide delete button for new events
+  const delBtn = el('cal-modal-del-btn');
+  if (delBtn) delBtn.style.display = 'none';
+};
+
+window.closeCalEventModal = () => el('modal-cal-event').classList.remove('is-open');
+
+/* Delete from modal */
+window.calDeleteFromModal = async function() {
+  if (!CAL.editId) return;
+  closeCalEventModal();
+  await calDeleteEvent(CAL.editId);
+};
+
+window.calToggleParticipant = function(code) {
+  CAL.participants[code] = !CAL.participants[code];
+  // At least one must be selected
+  if (!CAL.participants.vova && !CAL.participants.yulia) {
+    CAL.participants[code] = true;
+  }
+  calUpdateParticipantUI();
+};
+
+function calUpdateParticipantUI() {
+  el('cal-part-vova').className  = 'chip' + (CAL.participants.vova  ? ' is-blue' : '');
+  el('cal-part-yulia').className = 'chip' + (CAL.participants.yulia ? ' is-pink' : '');
+}
+
+window.calToggleAllDay = function() {
+  const checked = el('cal-ev-allday').checked;
+  el('cal-ev-start').type = checked ? 'date' : 'datetime-local';
+  el('cal-ev-end').type   = checked ? 'date' : 'datetime-local';
+};
+
+/* ── SAVE EVENT ── */
+window.saveCalEvent = async function() {
+  const title = el('cal-ev-title').value.trim();
+  if (!title) { toast('Введите название'); return; }
+
+  const isAllDay = el('cal-ev-allday').checked;
+  const startRaw = el('cal-ev-start').value;
+  const endRaw   = el('cal-ev-end').value;
+  if (!startRaw || !endRaw) { toast('Укажите дату и время'); return; }
+
+  const start_at = new Date(startRaw).toISOString();
+  const end_at   = new Date(endRaw).toISOString();
+  if (new Date(end_at) <= new Date(start_at)) { toast('Конец должен быть после начала'); return; }
+
+  const desc     = el('cal-ev-desc').value.trim();
+  const location = el('cal-ev-location').value.trim();
+
+  // Creator = first selected participant
+  const creatorCode = CAL.participants.vova ? 'vova' : 'yulia';
+  const creatorId   = MEMBER_IDS[creatorCode];
+
+  const btn = el('modal-cal-event').querySelector('.btn-modal-save');
+  btn.disabled = true; btn.textContent = 'Сохраняем...';
+
+  try {
+    if (CAL.editId) {
+      // UPDATE
+      const { error } = await sb.from('calendar_events').update({
+        title, description: desc || null, start_at, end_at,
+        is_all_day: isAllDay, location: location || null,
+        updated_by_member_id: creatorId,
+      }).eq('id', CAL.editId);
+      if (error) throw error;
+
+      // Update participants: delete old, insert new
+      await sb.from('calendar_event_participants').delete().eq('event_id', CAL.editId);
+      await calInsertParticipants(CAL.editId, creatorId);
+      toast('✅ Событие обновлено');
+    } else {
+      // INSERT
+      const id = crypto.randomUUID();
+      const { error } = await sb.from('calendar_events').insert({
+        id, family_id: FID, title,
+        description: desc || null, start_at, end_at,
+        is_all_day: isAllDay, location: location || null,
+        created_by_member_id: creatorId,
+        updated_by_member_id: creatorId,
+        status: 'active', source: 'internal',
+      });
+      if (error) throw error;
+      await calInsertParticipants(id, creatorId);
+      toast('✅ Событие создано');
+    }
+
+    closeCalEventModal();
+    await calLoadEvents();
+    calRender();
+    if (CAL.selDate) calSelectDate(CAL.selDate);
+  } catch(err) {
+    console.error(err); toast('Ошибка: ' + err.message);
+  }
+  btn.disabled = false; btn.textContent = 'Сохранить';
+};
+
+async function calInsertParticipants(eventId, creatorId) {
+  const rows = [];
+  if (CAL.participants.vova) {
+    rows.push({ event_id: eventId, member_id: MEMBER_IDS.vova,
+      role: MEMBER_IDS.vova === creatorId ? 'owner' : 'participant' });
+  }
+  if (CAL.participants.yulia) {
+    rows.push({ event_id: eventId, member_id: MEMBER_IDS.yulia,
+      role: MEMBER_IDS.yulia === creatorId ? 'owner' : 'participant' });
+  }
+  if (!rows.length) return;
+  const { error } = await sb.from('calendar_event_participants').insert(rows);
+  if (error) throw error;
+}
+
+/* ── EDIT EVENT ── */
+window.calEditEvent = function(id) {
+  const ev = CAL.events.find(e => e.id === id);
+  if (!ev) return;
+  CAL.editId = id;
+
+  el('cal-modal-title').textContent = 'Редактировать событие';
+  el('cal-ev-title').value    = ev.title;
+  el('cal-ev-desc').value     = ev.description || '';
+  el('cal-ev-location').value = ev.location || '';
+  el('cal-ev-allday').checked = ev.is_all_day;
+
+  if (ev.is_all_day) {
+    el('cal-ev-start').type = 'date';
+    el('cal-ev-end').type   = 'date';
+    el('cal-ev-start').value = calLocalDate(ev.start_at);
+    el('cal-ev-end').value   = calLocalDate(ev.end_at);
+  } else {
+    el('cal-ev-start').type = 'datetime-local';
+    el('cal-ev-end').type   = 'datetime-local';
+    el('cal-ev-start').value = calToInputLocal(ev.start_at);
+    el('cal-ev-end').value   = calToInputLocal(ev.end_at);
+  }
+
+  CAL.participants = {
+    vova:  ev.participants.includes(MEMBER_IDS.vova),
+    yulia: ev.participants.includes(MEMBER_IDS.yulia),
+  };
+  // Fallback if no participants loaded
+  if (!CAL.participants.vova && !CAL.participants.yulia) CAL.participants.vova = true;
+  calUpdateParticipantUI();
+  el('modal-cal-event').classList.add('is-open');
+  // Show delete button in edit mode
+  const delBtn = el('cal-modal-del-btn');
+  if (delBtn) delBtn.style.display = 'flex';
+};
+
+/* ── DELETE EVENT (soft delete) ── */
+window.calDeleteEvent = async function(id) {
+  const ev = CAL.events.find(e => e.id === id);
+  const title = ev?.title || 'событие';
+  const ok = await showConfirm('Удалить событие?', `"${title}" будет удалено.`);
+  if (!ok) return;
+
+  try {
+    const { error } = await sb.from('calendar_events').update({
+      deleted_at: new Date().toISOString(),
+      status: 'deleted',
+    }).eq('id', id);
+    if (error) throw error;
+
+    toast('🗑 Событие удалено');
+    await calLoadEvents();
+    calRender();
+    if (CAL.selDate) calSelectDate(CAL.selDate);
+  } catch(err) {
+    toast('Ошибка: ' + err.message);
+  }
+};
 
 /* ── INIT ── */
 lload();
