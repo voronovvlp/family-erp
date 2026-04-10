@@ -203,19 +203,21 @@ input, textarea, select { font-family: inherit; }
     align-items: start;
   }
 
-/* modal: positioned from top, scrollable */
+/* modal: centered on desktop, scrollable if needed */
   .modal-overlay {
     align-items: flex-start;
-    padding: 5vh 16px 5vh;
+    justify-content: center;
+    padding: 5vh 20px;
   }
   .modal {
     border-radius: var(--r-xl);
     max-width: 520px;
+    width: 100%;
     padding: 32px 32px 36px;
     box-shadow: 0 32px 96px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.05);
-    margin: 0 auto;
+    margin: 0;
     border-top: none;
-    width: 100%;
+    max-height: none;
   }
   .modal__handle { display: none; }
 
@@ -1201,7 +1203,7 @@ textarea { resize: none; height: 54px; }
       <span class="icon">📊</span>Сводка
     </button>
     <button class="sidebar-nav__btn" onclick="go('add')" id="dnav-add">
-      <span class="icon">➕</span><span class="sidebar-nav__label">Добавить расход/доход</span>
+      <span class="icon">➕</span><span class="sidebar-nav__label">Добавить операцию</span>
     </button>
     <button class="sidebar-nav__btn" onclick="go('list')" id="dnav-list">
       <span class="icon">📋</span>Операции
@@ -2011,15 +2013,22 @@ window.addCat = async function() {
 
 /* ── PIE CHART ── */
 // pie state: type/who already in S.pie; add range
-S.pie.range  = 1;   // months: 1, 3, 12
-S.pie.offset = 0;   // month offset from current (0 = current, -1 = prev, etc.)
+S.pie.range  = 1;
+S.pie.offset = 0;
 
+/* Returns local YYYY-MM strings for selected range */
 function pieGetMonths() {
   const months = [];
   const now = new Date();
+  const baseY = now.getFullYear();
+  const baseM = now.getMonth(); // 0-based
   for (let i = 0; i < S.pie.range; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + S.pie.offset - i, 1);
-    months.push(d.toISOString().slice(0,7));
+    // offset 0 = current month, -1 = prev, etc; iterate back from offset
+    const totalOffset = S.pie.offset - i;
+    const d = new Date(baseY, baseM + totalOffset, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    months.push(`${y}-${m}`);
   }
   return months;
 }
@@ -2036,7 +2045,6 @@ function pieUpdateRangeLabel() {
     const [y1,m1] = first.split('-'); const [y2,m2] = last.split('-');
     lbl.textContent = RU_MO[parseInt(m1)-1] + (y1!==y2?' '+y1:'') + ' — ' + RU_MO[parseInt(m2)-1] + ' ' + y2;
   }
-  // disable next if already at current month
   const nextBtn = el('pie-next');
   if (nextBtn) nextBtn.disabled = S.pie.offset >= 0;
 }
@@ -2071,14 +2079,19 @@ window.setPie = function(k, v) {
 };
 window.openAnalytics = function() {
   el('modal-analytics').classList.add('is-open');
-  S.pie = { type:'expense', who:'all', range:1, offset:0 };
+  // reset type/who but keep range/offset so user doesn't lose their period selection
+  S.pie.type = 'expense';
+  S.pie.who  = 'all';
+  if (S.pie.range  === undefined) S.pie.range  = 1;
+  if (S.pie.offset === undefined) S.pie.offset = 0;
   el('ptab-exp').className  = 'chip is-red';
   el('ptab-inc').className  = 'chip';
   el('ptab-all').className  = 'chip is-white';
   el('ptab-vova').className = 'chip';
   el('ptab-yulia').className= 'chip';
+  // sync range tab UI
   ['1','3','12'].forEach(n => {
-    const b = el('pie-r'+n); if (b) b.classList.toggle('is-active', n==='1');
+    const b = el('pie-r'+n); if (b) b.classList.toggle('is-active', parseInt(n) === S.pie.range);
   });
   pieUpdateRangeLabel();
   drawPie();
