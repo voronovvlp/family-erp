@@ -417,7 +417,7 @@ function rHomeUpcoming() {
       ? `через ${diffMin} мин`
       : `через ${Math.floor(diffMin/60)} ч`;
 
-    return `<div class="upcoming-event-row" onclick="go('calendar')">
+    return `<div class="upcoming-event-row" onclick="calOpenFromHome('${ev.id}','${calLocalDate(ev.start_at)}')">
       <div class="upcoming-event-dot" style="background:${color}"></div>
       <div class="upcoming-event-info">
         <div class="upcoming-event-title">${ev.title || ''}</div>
@@ -430,11 +430,48 @@ function rHomeUpcoming() {
   wrap.innerHTML = `<div class="upcoming-card">
     <div class="upcoming-card__header">
       <span class="upcoming-card__title">📅 Ближайшие события</span>
-      <button class="upcoming-card__link" onclick="go('calendar')">Все →</button>
+      <button class="upcoming-card__link" onclick="calOpenFromHome(null, null)">Все →</button>
     </div>
     ${rows}
   </div>`;
 }
+
+/* Open calendar from home screen, optionally jumping to a specific date+event */
+window.calOpenFromHome = function(eventId, dateStr) {
+  go('calendar'); // switches screen and calls calInit()
+  // After calInit runs (async), navigate to date and highlight event
+  if (dateStr || eventId) {
+    const targetDate = dateStr || todayS();
+    // Wait for calInit to finish loading, then navigate
+    setTimeout(async () => {
+      // Switch to day view for better focus
+      if (dateStr) {
+        CAL.view = 'day';
+        ['month','week','day'].forEach(n => el('calv-'+n)?.classList.toggle('is-active', n === 'day'));
+        const d = calDateAt(targetDate);
+        CAL.dayDate   = d;
+        CAL.year      = d.getFullYear();
+        CAL.month     = d.getMonth();
+        CAL.weekStart = calMonday(d);
+        CAL.selDate   = targetDate;
+        await calLoadEvents();
+        calRender();
+        calUpdateAside(targetDate);
+      }
+      // Highlight the specific event in aside
+      if (eventId) {
+        setTimeout(() => {
+          const item = document.querySelector(`.cal-event-item[onclick*="${eventId}"], [data-event-id="${eventId}"]`);
+          if (item) {
+            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            item.classList.add('is-highlighted');
+            setTimeout(() => item.classList.remove('is-highlighted'), 2000);
+          }
+        }, 100);
+      }
+    }, 400);
+  }
+};
 
 /* ── FILTERS ── */
 function updateFilterUI() {
@@ -806,14 +843,15 @@ window.calShiftMonth = async function(dir) {
 
 window.calGoToday = async function() {
   const now = new Date();
-  CAL.year  = now.getFullYear();
-  CAL.month = now.getMonth();
+  CAL.year      = now.getFullYear();
+  CAL.month     = now.getMonth();
   CAL.dayDate   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   CAL.weekStart = calMonday(CAL.dayDate);
   CAL.selDate   = todayS();
   await calLoadEvents();
   calRender();
-  calSelectDate(todayS());
+  // Update aside without triggering mobile drawer
+  calUpdateAside(todayS());
 };
 
 /* ── RENDER DISPATCHER ── */
@@ -836,6 +874,8 @@ function calRenderMonth() {
   el('cal-month-title').textContent = RU_MONTHS[CAL.month] + ' ' + CAL.year;
   const grid = el('cal-grid');
   if (!grid) return;
+  // Reset layout classes from week/day views
+  grid.closest('.cal-layout')?.classList.remove('is-week-view', 'is-day-view');
 
   const firstDay = new Date(CAL.year, CAL.month, 1);
   let startDow = firstDay.getDay();                  // 0=Sun
@@ -904,13 +944,16 @@ function calRenderMonth() {
 function calRenderWeek() {
   const grid = el('cal-grid');
   if (!grid || !CAL.weekStart) return;
+  // Add class to layout for full-width mode
+  el('cal-grid')?.closest('.cal-layout')?.classList.add('is-week-view');
+  el('cal-grid')?.closest('.cal-layout')?.classList.remove('is-day-view');
+
   const ws   = CAL.weekStart;
   const days = Array.from({length:7}, (_,i) => new Date(ws.getFullYear(), ws.getMonth(), ws.getDate()+i));
   const todayStr = todayS();
 
-  // Title: "7 – 13 апреля 2026" or cross-month "28 апр – 4 мая 2026"
   const d0 = days[0], d6 = days[6];
-  const titleEnd = `${d6.getDate()} ${RU_MONTHS_GEN[d6.getMonth()]} ${d6.getFullYear()}`;
+  const titleEnd   = `${d6.getDate()} ${RU_MONTHS_GEN[d6.getMonth()]} ${d6.getFullYear()}`;
   const titleStart = d0.getMonth() === d6.getMonth()
     ? String(d0.getDate())
     : `${d0.getDate()} ${RU_MONTHS_GEN[d0.getMonth()]}`;
@@ -922,13 +965,13 @@ function calRenderWeek() {
     (evMap[d] = evMap[d] || []).push(ev);
   });
 
-  let html = '<div class="cal-week-view">';
+  let cols = '';
   days.forEach(d => {
-    const dateStr  = calYMD(d);
-    const isToday  = dateStr === todayStr;
-    const isSel    = dateStr === CAL.selDate;
-    const dayEvs   = (evMap[dateStr] || []).sort(calSortEvents);
-    html += `<div class="cal-week-col${isToday?' is-today':''}${isSel?' is-selected':''}" data-date="${dateStr}" onclick="calSelectDate('${dateStr}')">
+    const dateStr = calYMD(d);
+    const isToday = dateStr === todayStr;
+    const isSel   = dateStr === CAL.selDate;
+    const dayEvs  = (evMap[dateStr] || []).sort(calSortEvents);
+    cols += `<div class="cal-week-col${isToday?' is-today':''}${isSel?' is-selected':''}" data-date="${dateStr}" onclick="calSelectDate('${dateStr}')">
       <div class="cal-week-header">
         <span class="cal-week-wd">${RU_WD_SHORT[d.getDay()]}</span>
         <span class="cal-week-num${isToday?' is-today-num':''}">${d.getDate()}</span>
@@ -936,20 +979,24 @@ function calRenderWeek() {
       <div class="cal-week-events">${dayEvs.map(ev => calPillHTML(ev, dateStr)).join('')}</div>
     </div>`;
   });
-  html += '</div>';
-  grid.innerHTML = html;
+  // Wrap in scrollable container for mobile
+  grid.innerHTML = `<div class="cal-week-wrap"><div class="cal-week-view">${cols}</div></div>`;
 }
 
 /* ── DAY VIEW — time slot grid ── */
 function calRenderDay() {
   const grid = el('cal-grid');
   if (!grid || !CAL.dayDate) return;
+  // Update layout class
+  el('cal-grid')?.closest('.cal-layout')?.classList.add('is-day-view');
+  el('cal-grid')?.closest('.cal-layout')?.classList.remove('is-week-view');
+
   const d       = CAL.dayDate;
   const dateStr = calYMD(d);
   CAL.selDate   = dateStr;
   el('cal-month-title').textContent = `${RU_WD_FULL[d.getDay()]}, ${d.getDate()} ${RU_MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`;
 
-  const dayEvs  = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr).sort(calSortEvents);
+  const dayEvs = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr).sort(calSortEvents);
   calUpdateAside(dateStr);
 
   if (!dayEvs.length) {
@@ -957,19 +1004,11 @@ function calRenderDay() {
     return;
   }
 
-  // Build hourly slots (only hours that have events ± 1)
-  const hours = new Set();
-  dayEvs.forEach(ev => {
-    if (!ev.is_all_day) {
-      const h = new Date(ev.start_at).getHours();
-      for (let i = Math.max(0, h-1); i <= Math.min(23, h+2); i++) hours.add(i);
-    }
-  });
-  // Always show at least current hour
-  hours.add(new Date().getHours());
-  const sortedHours = [...hours].sort((a,b) => a-b);
+  // Build hourly slots — show all hours from first to last event + buffer
+  const allHours = dayEvs.filter(ev => !ev.is_all_day).map(ev => new Date(ev.start_at).getHours());
+  const minH = allHours.length ? Math.max(0, Math.min(...allHours) - 1) : 8;
+  const maxH = allHours.length ? Math.min(23, Math.max(...allHours) + 2) : 20;
 
-  // Group events by start hour
   const evByHour = {};
   dayEvs.forEach(ev => {
     if (ev.is_all_day) { (evByHour['allday'] = evByHour['allday']||[]).push(ev); return; }
@@ -978,26 +1017,23 @@ function calRenderDay() {
   });
 
   const allDayEvs = evByHour['allday'] || [];
-  let html = '<div class="cal-day-slot-grid">';
+  let html = '<div class="cal-day-wrap"><div class="cal-day-slot-grid">';
 
-  // All-day events at top
   if (allDayEvs.length) {
     html += `<div class="cal-day-slot" data-date="${dateStr}" data-hour="allday">
-      <div class="cal-day-slot-time" style="padding-top:10px;font-size:9px">Весь день</div>
+      <div class="cal-day-slot-time" style="font-size:9px;padding-top:12px">Весь<br>день</div>
       <div class="cal-day-slot-events">${allDayEvs.map(ev => calDayEventBlockHTML(ev)).join('')}</div>
     </div>`;
   }
 
-  // Hourly slots
-  sortedHours.forEach(h => {
+  for (let h = minH; h <= maxH; h++) {
     const slotEvs = evByHour[h] || [];
-    const timeStr = `${pad(h)}:00`;
     html += `<div class="cal-day-slot" data-date="${dateStr}" data-hour="${h}">
-      <div class="cal-day-slot-time">${timeStr}</div>
+      <div class="cal-day-slot-time">${pad(h)}:00</div>
       <div class="cal-day-slot-events">${slotEvs.map(ev => calDayEventBlockHTML(ev)).join('')}</div>
     </div>`;
-  });
-  html += '</div>';
+  }
+  html += '</div></div>';
   grid.innerHTML = html;
 }
 
@@ -1417,55 +1453,50 @@ window.calDeleteEvent = async function(id) {
 
 /* ── DRAG AND DROP ── */
 (function initCalDnD() {
-  let dragging  = null;  // { id, origDate, origHour }
-  let touchId   = null;
-  let longTimer = null;
-  const ghost   = document.getElementById('cal-drag-ghost');
+  let dragging   = null;
+  let touchId    = null;
+  let longTimer  = null;
+  let isDragging = false;
+  const ghost    = document.getElementById('cal-drag-ghost');
 
   function showGhost(title, x, y) {
     if (!ghost) return;
-    ghost.textContent = title || '…';
+    ghost.textContent = '📅 ' + (title||'…');
     ghost.style.display = 'block';
-    moveGhost(x, y);
-  }
-  function moveGhost(x, y) {
-    if (!ghost) return;
-    ghost.style.left = x + 'px';
-    ghost.style.top  = y + 'px';
+    ghost.style.left = (x + 12) + 'px';
+    ghost.style.top  = (y - 10) + 'px';
   }
   function hideGhost() { if (ghost) ghost.style.display = 'none'; }
-
-  function clearDragState() {
+  function clearAll() {
     document.querySelectorAll('.is-dragging').forEach(p => p.classList.remove('is-dragging'));
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    dragging = null; touchId = null;
+    dragging = null; touchId = null; isDragging = false;
+    hideGhost();
   }
 
-  // Find drop target — both cal-cell (month/week) and cal-day-slot (day view)
   function getDropTarget(el) {
-    return el?.closest('[data-date][data-hour], [data-date].cal-cell, [data-date].cal-week-col');
+    return el?.closest('.cal-day-slot[data-date][data-hour], .cal-cell[data-date], .cal-week-col[data-date]');
   }
 
-  // ── Mouse DnD ──
+  /* ── Mouse DnD ── */
   document.addEventListener('dragstart', e => {
     const pill = e.target.closest('[data-event-id][draggable]');
     if (!pill) return;
+    const slot = pill.closest('.cal-day-slot[data-hour]');
     dragging = {
       id:       pill.dataset.eventId,
       origDate: pill.dataset.date,
-      origHour: pill.dataset.hour || null,
-      title:    pill.dataset.title || pill.textContent.trim().slice(0,30),
+      origHour: slot ? slot.dataset.hour : null,
+      title:    pill.dataset.title || pill.textContent.trim().slice(0, 30),
     };
     pill.classList.add('is-dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', dragging.id);
-    // Custom drag image
     if (ghost) {
-      ghost.textContent = dragging.title;
-      ghost.style.display = 'block';
-      ghost.style.left = '-9999px';
-      try { e.dataTransfer.setDragImage(ghost, 60, 20); } catch(_) {}
-      setTimeout(() => { if (ghost) ghost.style.display = 'none'; }, 0);
+      ghost.textContent = '📅 ' + dragging.title;
+      ghost.style.left = '-9999px'; ghost.style.display = 'block';
+      try { e.dataTransfer.setDragImage(ghost, -10, 20); } catch(_) {}
+      setTimeout(hideGhost, 0);
     }
   });
 
@@ -1474,95 +1505,91 @@ window.calDeleteEvent = async function(id) {
     if (!target || !dragging) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    target.classList.add('drag-over');
+    if (!target.classList.contains('drag-over')) {
+      document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+      target.classList.add('drag-over');
+    }
   });
 
   document.addEventListener('dragleave', e => {
-    const target = getDropTarget(e.target);
-    if (target && !target.contains(e.relatedTarget)) target.classList.remove('drag-over');
+    const t = getDropTarget(e.target);
+    if (t && !t.contains(e.relatedTarget)) t.classList.remove('drag-over');
   });
 
   document.addEventListener('drop', async e => {
     e.preventDefault();
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
     const target = getDropTarget(e.target);
-    if (!target || !dragging) { clearDragState(); return; }
-
+    if (!target || !dragging) { clearAll(); return; }
     const newDate = target.dataset.date;
-    const newHour = target.dataset.hour;   // undefined for month/week cells
-
-    if (newDate) {
-      const sameDate = newDate === dragging.origDate;
-      const sameHour = newHour === undefined || newHour === dragging.origHour;
-      if (!sameDate || !sameHour) {
-        await calMoveEventToDateHour(dragging.id, newDate, newHour !== undefined ? parseInt(newHour) : null);
-      }
+    const rawHour = target.dataset.hour;
+    const newHour = (rawHour !== undefined && rawHour !== 'allday') ? parseInt(rawHour) : null;
+    const origHourInt = (dragging.origHour !== null && dragging.origHour !== 'allday') ? parseInt(dragging.origHour) : null;
+    if (newDate !== dragging.origDate || newHour !== origHourInt) {
+      await calMoveEventToDateHour(dragging.id, newDate, newHour);
     }
-    clearDragState();
+    clearAll();
   });
 
-  document.addEventListener('dragend', () => { clearDragState(); hideGhost(); });
+  document.addEventListener('dragend', clearAll);
 
-  // ── Touch DnD (long-press 500ms) ──
+  /* ── Touch DnD — long press 600ms, separate from swipe-to-delete ── */
   document.addEventListener('touchstart', e => {
     const pill = e.target.closest('[data-event-id][draggable]');
-    if (!pill) return;
+    if (!pill || e.target.closest('.tx-swipe-wrap')) return;
     const touch = e.touches[0];
     longTimer = setTimeout(() => {
+      isDragging = true;
+      const slot = pill.closest('.cal-day-slot[data-hour]');
       dragging = {
         id:       pill.dataset.eventId,
         origDate: pill.dataset.date,
-        origHour: pill.dataset.hour || null,
-        title:    pill.dataset.title || pill.textContent.trim().slice(0,30),
+        origHour: slot ? slot.dataset.hour : null,
+        title:    pill.dataset.title || pill.textContent.trim().slice(0, 30),
       };
       touchId = touch.identifier;
       pill.classList.add('is-dragging');
-      showGhost('📅 ' + dragging.title, touch.clientX, touch.clientY);
-      // haptic if available
-      try { navigator.vibrate && navigator.vibrate(30); } catch(_){}
-    }, 500);
+      showGhost(dragging.title, touch.clientX, touch.clientY);
+      try { navigator.vibrate && navigator.vibrate([40]); } catch(_) {}
+    }, 600);
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
-    clearTimeout(longTimer);
+    if (!isDragging) { clearTimeout(longTimer); longTimer = null; return; }
     if (!dragging) return;
     const t = Array.from(e.touches).find(x => x.identifier === touchId);
     if (!t) return;
-    moveGhost(t.clientX, t.clientY);
+    showGhost(dragging.title, t.clientX, t.clientY);
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    getDropTarget(el)?.classList.add('drag-over');
+    getDropTarget(document.elementFromPoint(t.clientX, t.clientY))?.classList.add('drag-over');
   }, { passive: true });
 
   document.addEventListener('touchend', async e => {
-    clearTimeout(longTimer);
-    if (!dragging) return;
+    clearTimeout(longTimer); longTimer = null;
+    if (!isDragging || !dragging) { isDragging = false; return; }
+    e.preventDefault();
     const t = Array.from(e.changedTouches).find(x => x.identifier === touchId);
-    hideGhost();
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
     if (t) {
-      const el = document.elementFromPoint(t.clientX, t.clientY);
-      const target = getDropTarget(el);
+      const target = getDropTarget(document.elementFromPoint(t.clientX, t.clientY));
       if (target?.dataset.date) {
         const newDate = target.dataset.date;
-        const newHour = target.dataset.hour;
-        const sameDate = newDate === dragging.origDate;
-        const sameHour = newHour === undefined || newHour === dragging.origHour;
-        if (!sameDate || !sameHour) {
-          await calMoveEventToDateHour(dragging.id, newDate, newHour !== undefined ? parseInt(newHour) : null);
+        const rawHour = target.dataset.hour;
+        const newHour = (rawHour !== undefined && rawHour !== 'allday') ? parseInt(rawHour) : null;
+        const origHourInt = (dragging.origHour !== null && dragging.origHour !== 'allday') ? parseInt(dragging.origHour) : null;
+        if (newDate !== dragging.origDate || newHour !== origHourInt) {
+          await calMoveEventToDateHour(dragging.id, newDate, newHour);
         }
       }
     }
-    clearDragState();
-  }, { passive: true });
+    clearAll();
+  }, { passive: false });
 
   document.addEventListener('touchcancel', () => {
-    clearTimeout(longTimer);
-    hideGhost();
-    clearDragState();
+    clearTimeout(longTimer); longTimer = null; clearAll();
   }, { passive: true });
 })();
+
 
 /* Move event to new date and optionally new hour */
 async function calMoveEventToDateHour(eventId, newDate, newHour) {
