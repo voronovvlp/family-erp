@@ -234,9 +234,10 @@ input, textarea, select { font-family: inherit; }
 
   /* modal: vertically centered on desktop */
   .modal-overlay {
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 24px;
+    padding: 40px 24px;
+    overflow-y: auto;
   }
   .modal {
     border-radius: var(--r-xl);
@@ -244,10 +245,12 @@ input, textarea, select { font-family: inherit; }
     width: 100%;
     padding: 32px 32px 36px;
     box-shadow: 0 32px 96px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.05);
-    margin: 0;
+    margin: auto;
     border-top: none;
-    max-height: 90vh;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
+    flex-shrink: 0;
+    position: relative;
   }
   .modal__handle { display: none; }
 
@@ -635,6 +638,9 @@ input, textarea, select { font-family: inherit; }
 .amount-wrap__input--sm { font-size: 24px; }
 
 input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="text"],
 textarea,
 select {
   width: 100%;
@@ -650,10 +656,30 @@ select {
   transition: border-color .18s;
   line-height: 1.4;
 }
+/* standalone number fields (not inside amount-wrap) */
+input[type="number"]:not(.amount-wrap__input) {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-txt);
+  font-size: 14px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color .18s;
+  line-height: 1.4;
+}
 input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="time"]:focus,
+input[type="text"]:focus,
+input[type="number"]:not(.amount-wrap__input):focus,
 textarea:focus,
 select:focus { border-color: var(--c-line2); }
-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.3); cursor: pointer; }
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(.3); cursor: pointer; }
 textarea { resize: none; height: 54px; }
 .textarea--sm { height: 48px; }
 
@@ -814,7 +840,6 @@ textarea { resize: none; height: 54px; }
   z-index: 50;
   align-items: flex-end;
   justify-content: center;
-  overflow-y: auto;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -878,6 +903,16 @@ textarea { resize: none; height: 54px; }
   transition: border-color .18s, color .18s, background .18s;
 }
 .btn-modal-cancel:hover { border-color: var(--c-line2); color: var(--c-txt); background: var(--c-surface3); }
+.btn-modal-delete {
+  background: var(--c-red-bg) !important;
+  color: var(--c-red) !important;
+  border-color: var(--c-red-brd) !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.btn-modal-delete:hover { background: rgba(229,68,61,.18) !important; }
 /* modal field labels */
 .modal-field-label {
   font-size: 10px; font-weight: 600; color: var(--c-txt3);
@@ -1309,6 +1344,8 @@ textarea { resize: none; height: 54px; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  overflow: hidden;
+  min-width: 0;
 }
 .cal-cell:hover { background: var(--c-surface); border-color: var(--c-line); }
 .cal-cell.is-other-month { opacity: .35; }
@@ -1571,6 +1608,68 @@ textarea { resize: none; height: 54px; }
 
 /* Hide weekdays in week/day view */
 .cal-grid:empty + .cal-weekdays { display: none; }
+/* ── TIME PICKER (Outlook-style) ── */
+.cal-time-wrap {
+  position: relative;
+}
+.cal-time-input {
+  width: 100% !important;
+  padding: 9px 12px !important;
+  font-size: 14px !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+.cal-time-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--c-surface2);
+  border: 1px solid var(--c-line2);
+  border-radius: var(--r-md);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 200;
+  display: none;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+.cal-time-dropdown.is-open { display: block; }
+.cal-time-opt {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--c-txt2);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.cal-time-opt:hover,
+.cal-time-opt.is-active { background: var(--c-surface3); color: var(--c-txt); }
+
+/* ── DRAG AND DROP ── */
+.cal-event-pill.is-dragging {
+  opacity: .4;
+  cursor: grabbing;
+}
+.cal-event-pill { cursor: grab; }
+.cal-cell.drag-over {
+  background: var(--c-blue-bg) !important;
+  border-color: var(--c-blue) !important;
+}
+.cal-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--c-surface3);
+  border: 1px solid var(--c-line2);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-txt);
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  transform: translate(-50%, -50%);
+  display: none;
+}
 
 </style>
 </head>
@@ -1910,11 +2009,19 @@ textarea { resize: none; height: 54px; }
       <div style="display:flex;gap:10px">
         <div style="flex:1">
           <p class="modal-field-label">Начало</p>
-          <input type="datetime-local" id="cal-ev-start">
+          <input type="date" id="cal-ev-start-date" style="margin-bottom:6px">
+          <div class="cal-time-wrap">
+            <input type="text" id="cal-ev-start-time" class="cal-time-input" placeholder="09:00" maxlength="5" oninput="calTimeInput(this)" onfocus="calShowTimeDropdown('start')" onblur="calHideDropdown('cal-start-dropdown')">
+            <div class="cal-time-dropdown" id="cal-start-dropdown"></div>
+          </div>
         </div>
         <div style="flex:1">
           <p class="modal-field-label">Конец</p>
-          <input type="datetime-local" id="cal-ev-end">
+          <input type="date" id="cal-ev-end-date" style="margin-bottom:6px">
+          <div class="cal-time-wrap">
+            <input type="text" id="cal-ev-end-time" class="cal-time-input" placeholder="10:00" maxlength="5" oninput="calTimeInput(this)" onfocus="calShowTimeDropdown('end')" onblur="calHideDropdown('cal-end-dropdown')">
+            <div class="cal-time-dropdown" id="cal-end-dropdown"></div>
+          </div>
         </div>
       </div>
       <div>
@@ -1935,7 +2042,7 @@ textarea { resize: none; height: 54px; }
       </div>
       <div class="modal-actions">
         <button class="btn-modal-cancel" onclick="closeCalEventModal()">Отмена</button>
-        <button class="btn-confirm-ok" id="cal-modal-del-btn" onclick="calDeleteFromModal()" style="display:none;padding:13px 16px;font-size:14px;border-radius:var(--r-md)">🗑 Удалить</button>
+        <button class="btn-modal-cancel btn-modal-delete" id="cal-modal-del-btn" onclick="calDeleteFromModal()" style="display:none">🗑 Удалить</button>
         <button class="btn-modal-save" onclick="saveCalEvent()">Сохранить</button>
       </div>
     </div>
@@ -2044,6 +2151,7 @@ textarea { resize: none; height: 54px; }
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="cal-drag-ghost" id="cal-drag-ghost"></div>
 
 <!-- ══════════════════════════════════
      JAVASCRIPT
@@ -2839,15 +2947,15 @@ function calRender() {
     const shown = dayEvents.slice(0, MAX_PILLS);
     shown.forEach(ev => {
       const pColor = calEventColorClass(ev);
-      const t = ev.is_all_day ? 'Весь день' : calLocalDate(ev.start_at).slice(11,16) || ev.start_at.slice(11,16);
       const tLocal = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
-      pillsHTML += `<div class="cal-event-pill cal-event-pill--${pColor}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title}">${tLocal} ${ev.title}</div>`;
+      const safeTitle = ev.title.replace(/"/g, '&quot;');
+      pillsHTML += `<div class="cal-event-pill cal-event-pill--${pColor}" draggable="true" data-event-id="${ev.id}" data-date="${dateStr}" data-title="${safeTitle}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title}">${tLocal} ${ev.title}</div>`;
     });
     if (dayEvents.length > MAX_PILLS) {
       pillsHTML += `<div class="cal-more-link" onclick="calSelectDate('${dateStr}');event.stopPropagation()">+${dayEvents.length - MAX_PILLS} ещё</div>`;
     }
 
-    cells += `<div class="${cls}" onclick="calSelectDate('${dateStr}')">
+    cells += `<div class="${cls}" data-date="${dateStr}" onclick="calSelectDate('${dateStr}')">
       <div class="cal-day-num">${day}</div>
       ${pillsHTML}
     </div>`;
@@ -3005,7 +3113,7 @@ function calRenderWeek() {
     const isToday = dateStr === todayStr;
     const isSelected = dateStr === CAL.selDate;
     const dayEvents = evMap[dateStr] || [];
-    html += `<div class="cal-week-col ${isToday?'is-today':''} ${isSelected?'is-selected':''}" onclick="calSelectDate('${dateStr}')">
+    html += `<div class="cal-week-col ${isToday?'is-today':''} ${isSelected?'is-selected':''}" data-date="${dateStr}" onclick="calSelectDate('${dateStr}')">
       <div class="cal-week-header">
         <span class="cal-week-wd">${RU_WD[d.getDay()]}</span>
         <span class="cal-week-num ${isToday?'is-today-num':''}">${d.getDate()}</span>
@@ -3014,7 +3122,8 @@ function calRenderWeek() {
         ${dayEvents.map(ev => {
           const pc = calEventColorClass(ev);
           const t = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
-          return `<div class="cal-event-pill cal-event-pill--${pc}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title}">${t} ${ev.title}</div>`;
+          const safeTitle = ev.title.replace(/"/g,'&quot;');
+          return `<div class="cal-event-pill cal-event-pill--${pc}" draggable="true" data-event-id="${ev.id}" data-date="${dateStr}" data-title="${safeTitle}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title}">${t} ${ev.title}</div>`;
         }).join('')}
         ${dayEvents.length === 0 ? '' : ''}
       </div>
@@ -3061,23 +3170,27 @@ window.openCalEventModal = function(prefillDate) {
   CAL.editId = null;
   el('cal-modal-title').textContent = 'Новое событие';
 
-  // Default date/time
+  // Default date/time with 30-min snap
   const base = prefillDate || CAL.selDate || todayS();
-  const now = new Date();
-  const hh  = String(now.getHours()).padStart(2,'0');
-  const mm  = String(now.getMinutes()).padStart(2,'0');
-  const defaultStart = `${base}T${hh}:${mm}`;
-  const endHour = String((now.getHours()+1) % 24).padStart(2,'0');
-  const defaultEnd = `${base}T${endHour}:${mm}`;
+  const now  = new Date();
+  const rawH = now.getHours(), rawM = now.getMinutes();
+  const snM  = rawM < 15 ? 0 : rawM < 45 ? 30 : 0;
+  const carry= rawM >= 45 ? 1 : 0;
+  const sH   = (rawH + carry) % 24;
+  const eH   = (sH + 1) % 24;
+  const pad  = n => String(n).padStart(2,'0');
 
-  el('cal-ev-title').value    = '';
-  el('cal-ev-start').value    = defaultStart;
-  el('cal-ev-end').value      = defaultEnd;
-  el('cal-ev-allday').checked = false;
-  el('cal-ev-location').value = '';
-  el('cal-ev-desc').value     = '';
+  el('cal-ev-title').value         = '';
+  el('cal-ev-start-date').value    = base;
+  el('cal-ev-start-time').value    = `${pad(sH)}:${pad(snM)}`;
+  el('cal-ev-end-date').value      = base;
+  el('cal-ev-end-time').value      = `${pad(eH)}:${pad(snM)}`;
+  el('cal-ev-allday').checked      = false;
+  el('cal-ev-location').value      = '';
+  el('cal-ev-desc').value          = '';
+  el('cal-ev-start-time').style.display = '';
+  el('cal-ev-end-time').style.display   = '';
 
-  // Participants: default Вова
   CAL.participants = { vova: true, yulia: false };
   calUpdateParticipantUI();
 
@@ -3085,6 +3198,9 @@ window.openCalEventModal = function(prefillDate) {
   // Hide delete button for new events
   const delBtn = el('cal-modal-del-btn');
   if (delBtn) delBtn.style.display = 'none';
+
+  // Scroll time input into view on mobile
+  setTimeout(() => el('cal-ev-title')?.focus(), 100);
 };
 
 window.closeCalEventModal = () => el('modal-cal-event').classList.remove('is-open');
@@ -3112,8 +3228,73 @@ function calUpdateParticipantUI() {
 
 window.calToggleAllDay = function() {
   const checked = el('cal-ev-allday').checked;
-  el('cal-ev-start').type = checked ? 'date' : 'datetime-local';
-  el('cal-ev-end').type   = checked ? 'date' : 'datetime-local';
+  const st = el('cal-ev-start-time'), et = el('cal-ev-end-time');
+  if (st) st.style.display = checked ? 'none' : '';
+  if (et) et.style.display = checked ? 'none' : '';
+};
+
+/* Helper: get ISO from split date+time inputs */
+function calGetISO(dateId, timeId) {
+  const dv = el(dateId)?.value; if (!dv) return null;
+  const tv = el(timeId)?.value || '00:00';
+  const [hh, mm] = tv.split(':').map(s => parseInt(s) || 0);
+  const d = new Date(dv + 'T00:00:00'); d.setHours(hh, mm, 0, 0);
+  return d.toISOString();
+}
+/* Helper: set split fields from ISO */
+function calSetFields(dateId, timeId, isoStr) {
+  if (!isoStr) return;
+  if (el(dateId)) el(dateId).value = calLocalDate(isoStr);
+  if (el(timeId)) el(timeId).value = calLocalTime(isoStr);
+}
+
+/* ── TIME PICKER ── */
+function calBuildTimeOptions() {
+  const opts = [];
+  for (let h = 0; h < 24; h++)
+    for (let m = 0; m < 60; m += 30)
+      opts.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  return opts;
+}
+window.calTimeInput = function(inp) {
+  let v = inp.value.replace(/[^0-9:]/g,'');
+  if (v.length === 2 && !v.includes(':') && inp._lastLen !== 3) v = v + ':';
+  inp._lastLen = v.length; inp.value = v;
+};
+window.calShowTimeDropdown = function(which) {
+  const dropId = `cal-${which}-dropdown`;
+  const inp    = el(`cal-ev-${which}-time`);
+  const drop   = el(dropId);
+  if (!drop || !inp) return;
+  const cur  = inp.value;
+  drop.innerHTML = calBuildTimeOptions().map(t =>
+    `<div class="cal-time-opt${t===cur?' is-active':''}" onmousedown="calPickTime('${which}','${t}')">${t}</div>`
+  ).join('');
+  drop.classList.add('is-open');
+  setTimeout(() => {
+    const active = drop.querySelector('.is-active');
+    if (active) active.scrollIntoView({ block:'center' });
+    else {
+      const [h] = (cur||'09:00').split(':');
+      const idx = parseInt(h||9) * 2;
+      if (drop.children[idx]) drop.children[idx].scrollIntoView({ block:'center' });
+    }
+  }, 10);
+};
+window.calPickTime = function(which, t) {
+  const inp = el(`cal-ev-${which}-time`); if (inp) inp.value = t;
+  if (which === 'start') {
+    const [hh, mm] = t.split(':').map(Number);
+    const eH = String((hh + 1) % 24).padStart(2,'0');
+    const eM = String(mm).padStart(2,'0');
+    const et = el('cal-ev-end-time');
+    if (et && !et.value) et.value = `${eH}:${eM}`;
+    const sd = el('cal-ev-start-date'), ed = el('cal-ev-end-date');
+    if (sd && ed && !ed.value) ed.value = sd.value;
+  }
+};
+window.calHideDropdown = function(id) {
+  setTimeout(() => el(id)?.classList.remove('is-open'), 150);
 };
 
 /* ── SAVE EVENT ── */
@@ -3122,18 +3303,13 @@ window.saveCalEvent = async function() {
   if (!title) { toast('Введите название'); return; }
 
   const isAllDay = el('cal-ev-allday').checked;
-  const startRaw = el('cal-ev-start').value;
-  const endRaw   = el('cal-ev-end').value;
-  if (!startRaw || !endRaw) { toast('Укажите дату и время'); return; }
-
-  const start_at = new Date(startRaw).toISOString();
-  const end_at   = new Date(endRaw).toISOString();
+  const start_at = calGetISO('cal-ev-start-date', 'cal-ev-start-time');
+  const end_at   = calGetISO('cal-ev-end-date',   'cal-ev-end-time');
+  if (!start_at || !end_at) { toast('Укажите дату и время'); return; }
   if (new Date(end_at) <= new Date(start_at)) { toast('Конец должен быть после начала'); return; }
 
   const desc     = el('cal-ev-desc').value.trim();
   const location = el('cal-ev-location').value.trim();
-
-  // Creator = first selected participant
   const creatorCode = CAL.participants.vova ? 'vova' : 'yulia';
   const creatorId   = MEMBER_IDS[creatorCode];
 
@@ -3142,54 +3318,38 @@ window.saveCalEvent = async function() {
 
   try {
     if (CAL.editId) {
-      // UPDATE
       const { error } = await sb.from('calendar_events').update({
         title, description: desc || null, start_at, end_at,
         is_all_day: isAllDay, location: location || null,
         updated_by_member_id: creatorId,
       }).eq('id', CAL.editId);
       if (error) throw error;
-
-      // Update participants: delete old, insert new
       await sb.from('calendar_event_participants').delete().eq('event_id', CAL.editId);
       await calInsertParticipants(CAL.editId, creatorId);
       toast('✅ Событие обновлено');
     } else {
-      // INSERT
       const id = crypto.randomUUID();
       const { error } = await sb.from('calendar_events').insert({
-        id, family_id: FID, title,
-        description: desc || null, start_at, end_at,
+        id, family_id: FID, title, description: desc || null, start_at, end_at,
         is_all_day: isAllDay, location: location || null,
-        created_by_member_id: creatorId,
-        updated_by_member_id: creatorId,
+        created_by_member_id: creatorId, updated_by_member_id: creatorId,
         status: 'active', source: 'internal',
       });
       if (error) throw error;
       await calInsertParticipants(id, creatorId);
       toast('✅ Событие создано');
     }
-
     closeCalEventModal();
-    await calLoadEvents();
-    calRender();
+    await calLoadEvents(); calRender();
     if (CAL.selDate) calSelectDate(CAL.selDate);
-  } catch(err) {
-    console.error(err); toast('Ошибка: ' + err.message);
-  }
+  } catch(err) { console.error(err); toast('Ошибка: ' + err.message); }
   btn.disabled = false; btn.textContent = 'Сохранить';
 };
 
 async function calInsertParticipants(eventId, creatorId) {
   const rows = [];
-  if (CAL.participants.vova) {
-    rows.push({ event_id: eventId, member_id: MEMBER_IDS.vova,
-      role: MEMBER_IDS.vova === creatorId ? 'owner' : 'participant' });
-  }
-  if (CAL.participants.yulia) {
-    rows.push({ event_id: eventId, member_id: MEMBER_IDS.yulia,
-      role: MEMBER_IDS.yulia === creatorId ? 'owner' : 'participant' });
-  }
+  if (CAL.participants.vova)  rows.push({ event_id: eventId, member_id: MEMBER_IDS.vova,  role: MEMBER_IDS.vova  === creatorId ? 'owner' : 'participant' });
+  if (CAL.participants.yulia) rows.push({ event_id: eventId, member_id: MEMBER_IDS.yulia, role: MEMBER_IDS.yulia === creatorId ? 'owner' : 'participant' });
   if (!rows.length) return;
   const { error } = await sb.from('calendar_event_participants').insert(rows);
   if (error) throw error;
@@ -3200,7 +3360,6 @@ window.calEditEvent = function(id) {
   const ev = CAL.events.find(e => e.id === id);
   if (!ev) return;
   CAL.editId = id;
-
   el('cal-modal-title').textContent = 'Редактировать событие';
   el('cal-ev-title').value    = ev.title;
   el('cal-ev-desc').value     = ev.description || '';
@@ -3208,28 +3367,25 @@ window.calEditEvent = function(id) {
   el('cal-ev-allday').checked = ev.is_all_day;
 
   if (ev.is_all_day) {
-    el('cal-ev-start').type = 'date';
-    el('cal-ev-end').type   = 'date';
-    el('cal-ev-start').value = calLocalDate(ev.start_at);
-    el('cal-ev-end').value   = calLocalDate(ev.end_at);
+    el('cal-ev-start-date').value = calLocalDate(ev.start_at);
+    el('cal-ev-end-date').value   = calLocalDate(ev.end_at);
+    el('cal-ev-start-time').style.display = 'none';
+    el('cal-ev-end-time').style.display   = 'none';
   } else {
-    el('cal-ev-start').type = 'datetime-local';
-    el('cal-ev-end').type   = 'datetime-local';
-    el('cal-ev-start').value = calToInputLocal(ev.start_at);
-    el('cal-ev-end').value   = calToInputLocal(ev.end_at);
+    calSetFields('cal-ev-start-date', 'cal-ev-start-time', ev.start_at);
+    calSetFields('cal-ev-end-date',   'cal-ev-end-time',   ev.end_at);
+    el('cal-ev-start-time').style.display = '';
+    el('cal-ev-end-time').style.display   = '';
   }
-
   CAL.participants = {
     vova:  ev.participants.includes(MEMBER_IDS.vova),
     yulia: ev.participants.includes(MEMBER_IDS.yulia),
   };
-  // Fallback if no participants loaded
   if (!CAL.participants.vova && !CAL.participants.yulia) CAL.participants.vova = true;
   calUpdateParticipantUI();
   el('modal-cal-event').classList.add('is-open');
-  // Show delete button in edit mode
   const delBtn = el('cal-modal-del-btn');
-  if (delBtn) delBtn.style.display = 'flex';
+  if (delBtn) delBtn.style.display = '';
 };
 
 /* ── DELETE EVENT (soft delete) ── */
@@ -3238,22 +3394,107 @@ window.calDeleteEvent = async function(id) {
   const title = ev?.title || 'событие';
   const ok = await showConfirm('Удалить событие?', `"${title}" будет удалено.`);
   if (!ok) return;
-
   try {
     const { error } = await sb.from('calendar_events').update({
-      deleted_at: new Date().toISOString(),
-      status: 'deleted',
+      deleted_at: new Date().toISOString(), status: 'deleted',
     }).eq('id', id);
     if (error) throw error;
-
     toast('🗑 Событие удалено');
-    await calLoadEvents();
-    calRender();
+    await calLoadEvents(); calRender();
     if (CAL.selDate) calSelectDate(CAL.selDate);
-  } catch(err) {
-    toast('Ошибка: ' + err.message);
-  }
+  } catch(err) { toast('Ошибка: ' + err.message); }
 };
+
+/* ── DRAG AND DROP ── */
+(function initCalDnD() {
+  let dragging = null;
+  let touchId  = null;
+  const ghost  = document.getElementById('cal-drag-ghost');
+
+  // Mouse DnD
+  document.addEventListener('dragstart', e => {
+    const pill = e.target.closest('.cal-event-pill[data-event-id]');
+    if (!pill) return;
+    dragging = { id: pill.dataset.eventId, title: pill.dataset.title, origDate: pill.dataset.date };
+    pill.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setDragImage(new Image(), 0, 0); } catch(_) {}
+  });
+  document.addEventListener('dragover', e => {
+    const cell = e.target.closest('.cal-cell[data-date]');
+    if (!cell || !dragging) return;
+    e.preventDefault();
+    document.querySelectorAll('.cal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    cell.classList.add('drag-over');
+  });
+  document.addEventListener('dragleave', e => {
+    const cell = e.target.closest('.cal-cell[data-date]');
+    if (cell) cell.classList.remove('drag-over');
+  });
+  document.addEventListener('drop', async e => {
+    const cell = e.target.closest('.cal-cell[data-date]');
+    e.preventDefault();
+    document.querySelectorAll('.cal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    if (!cell || !dragging) return;
+    if (cell.dataset.date && cell.dataset.date !== dragging.origDate)
+      await calMoveEventToDate(dragging.id, cell.dataset.date);
+    dragging = null;
+  });
+  document.addEventListener('dragend', () => {
+    document.querySelectorAll('.cal-event-pill.is-dragging').forEach(p => p.classList.remove('is-dragging'));
+    document.querySelectorAll('.cal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    dragging = null;
+  });
+
+  // Touch DnD
+  document.addEventListener('touchstart', e => {
+    const pill = e.target.closest('.cal-event-pill[data-event-id]');
+    if (!pill) return;
+    dragging = { id: pill.dataset.eventId, title: pill.dataset.title, origDate: pill.dataset.date };
+    touchId  = e.touches[0].identifier;
+    if (ghost) { ghost.textContent = '📅 ' + (dragging.title||''); ghost.style.display = 'block'; }
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const t = Array.from(e.touches).find(x => x.identifier === touchId);
+    if (!t) return;
+    if (ghost) { ghost.style.left = t.clientX + 'px'; ghost.style.top = t.clientY + 'px'; }
+    document.querySelectorAll('.cal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    const el2 = document.elementFromPoint(t.clientX, t.clientY);
+    el2?.closest('.cal-cell[data-date]')?.classList.add('drag-over');
+  }, { passive: true });
+  document.addEventListener('touchend', async e => {
+    if (!dragging) return;
+    const t = Array.from(e.changedTouches).find(x => x.identifier === touchId);
+    if (ghost) ghost.style.display = 'none';
+    document.querySelectorAll('.cal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    if (t) {
+      const el2 = document.elementFromPoint(t.clientX, t.clientY);
+      const cell = el2?.closest('.cal-cell[data-date]');
+      if (cell && cell.dataset.date !== dragging.origDate)
+        await calMoveEventToDate(dragging.id, cell.dataset.date);
+    }
+    dragging = null; touchId = null;
+  }, { passive: true });
+})();
+
+async function calMoveEventToDate(eventId, newDate) {
+  const ev = CAL.events.find(e => e.id === eventId); if (!ev) return;
+  const origStart = new Date(ev.start_at);
+  const dur = new Date(ev.end_at) - origStart;
+  const [ny, nm, nd] = newDate.split('-').map(Number);
+  const newStart = new Date(ny, nm-1, nd, origStart.getHours(), origStart.getMinutes(), 0, 0);
+  const newEnd   = new Date(newStart.getTime() + dur);
+  try {
+    const { error } = await sb.from('calendar_events').update({
+      start_at: newStart.toISOString(), end_at: newEnd.toISOString(),
+    }).eq('id', eventId);
+    if (error) throw error;
+    toast('✅ Перенесено');
+    await calLoadEvents(); calRender();
+    if (CAL.selDate) calSelectDate(CAL.selDate);
+  } catch(err) { toast('Ошибка: ' + err.message); }
+}
 
 /* ── INIT ── */
 lload();
