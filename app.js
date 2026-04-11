@@ -799,37 +799,50 @@ async function calInit() {
 /* ── VIEW SWITCHER ── */
 window.calSetView = async function(v) {
   CAL.view = v;
-  ['month','week','day'].forEach(n => el('calv-'+n)?.classList.toggle('is-active', n === v));
-  // Sync period from selDate so selected day is still visible
+  ['month','week','day','agenda'].forEach(n => el('calv-'+n)?.classList.toggle('is-active', n === v));
   if (CAL.selDate) {
-    const d    = calDateAt(CAL.selDate);
-    CAL.year   = d.getFullYear();
-    CAL.month  = d.getMonth();
-    CAL.dayDate  = d;
-    CAL.weekStart = calMonday(d);
+    const d = calDateAt(CAL.selDate);
+    CAL.year  = d.getFullYear(); CAL.month = d.getMonth();
+    CAL.dayDate = d; CAL.weekStart = calMonday(d);
   }
-  await calLoadEvents();
+  // Agenda needs 2 months of events
+  if (v === 'agenda') {
+    const saved = CAL.view;
+    await calLoadEvents();
+    // Also load next month
+    const nextMonth = CAL.month + 1 > 11 ? 0 : CAL.month + 1;
+    const nextYear  = CAL.month + 1 > 11 ? CAL.year + 1 : CAL.year;
+    try {
+      const { data } = await sb.from('calendar_events')
+        .select('id,title,description,start_at,end_at,is_all_day,location,status,calendar_event_participants(member_id)')
+        .eq('family_id', FID).is('deleted_at', null).eq('status', 'active')
+        .gte('start_at', new Date(nextYear, nextMonth, 1).toISOString())
+        .lte('start_at', new Date(nextYear, nextMonth+1, 0, 23,59,59).toISOString());
+      if (data) {
+        const extra = data.map(e => ({ ...e, participants: (e.calendar_event_participants||[]).map(p=>p.member_id) }));
+        CAL.events = [...CAL.events, ...extra.filter(e => !CAL.events.find(x => x.id === e.id))];
+      }
+    } catch(_) {}
+  } else {
+    await calLoadEvents();
+  }
   calRender();
-  // Re-render aside for selected date
-  if (CAL.selDate) calUpdateAside(CAL.selDate);
+  if (CAL.selDate && v !== 'agenda') calUpdateAside(CAL.selDate);
 };
 
 /* ── NAVIGATION ── */
 window.calShiftMonth = async function(dir) {
   if (CAL.view === 'week') {
     CAL.weekStart = new Date(CAL.weekStart.getFullYear(), CAL.weekStart.getMonth(), CAL.weekStart.getDate() + dir * 7);
-    CAL.year  = CAL.weekStart.getFullYear();
-    CAL.month = CAL.weekStart.getMonth();
+    CAL.year = CAL.weekStart.getFullYear(); CAL.month = CAL.weekStart.getMonth();
   } else if (CAL.view === 'day') {
     CAL.dayDate = new Date(CAL.dayDate.getFullYear(), CAL.dayDate.getMonth(), CAL.dayDate.getDate() + dir);
-    CAL.year    = CAL.dayDate.getFullYear();
-    CAL.month   = CAL.dayDate.getMonth();
+    CAL.year = CAL.dayDate.getFullYear(); CAL.month = CAL.dayDate.getMonth();
     CAL.selDate = calYMD(CAL.dayDate);
   } else {
     CAL.month += dir;
     if (CAL.month > 11) { CAL.month = 0; CAL.year++; }
     if (CAL.month < 0)  { CAL.month = 11; CAL.year--; }
-    // Keep selDate only if it falls in new month
     if (CAL.selDate) {
       const [sy,sm] = CAL.selDate.split('-').map(Number);
       if (sy !== CAL.year || sm - 1 !== CAL.month) CAL.selDate = null;
@@ -843,14 +856,12 @@ window.calShiftMonth = async function(dir) {
 
 window.calGoToday = async function() {
   const now = new Date();
-  CAL.year      = now.getFullYear();
-  CAL.month     = now.getMonth();
-  CAL.dayDate   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  CAL.year = now.getFullYear(); CAL.month = now.getMonth();
+  CAL.dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   CAL.weekStart = calMonday(CAL.dayDate);
-  CAL.selDate   = todayS();
+  CAL.selDate = todayS();
   await calLoadEvents();
   calRender();
-  // Update aside without triggering mobile drawer
   calUpdateAside(todayS());
 };
 
@@ -858,12 +869,13 @@ window.calGoToday = async function() {
 function calRender() {
   const wd = el('cal-weekdays-row');
   if (CAL.view === 'week') {
-    wd?.classList.add('is-hidden');
-    calRenderWeek(); return;
+    wd?.classList.add('is-hidden'); calRenderWeek(); return;
   }
   if (CAL.view === 'day') {
-    wd?.classList.add('is-hidden');
-    calRenderDay(); return;
+    wd?.classList.add('is-hidden'); calRenderDay(); return;
+  }
+  if (CAL.view === 'agenda') {
+    wd?.classList.add('is-hidden'); calRenderAgenda(); return;
   }
   wd?.classList.remove('is-hidden');
   calRenderMonth();
@@ -875,7 +887,7 @@ function calRenderMonth() {
   const grid = el('cal-grid');
   if (!grid) return;
   // Reset layout classes from week/day views
-  grid.closest('.cal-layout')?.classList.remove('is-week-view', 'is-day-view');
+  grid.closest('.cal-layout')?.classList.remove('is-week-view', 'is-day-view', 'is-agenda-view');
 
   const firstDay = new Date(CAL.year, CAL.month, 1);
   let startDow = firstDay.getDay();                  // 0=Sun
@@ -940,116 +952,340 @@ function calRenderMonth() {
   grid.innerHTML = cells;
 }
 
-/* ── WEEK VIEW ── */
+/* ── WEEK VIEW — Outlook-style time grid ── */
 function calRenderWeek() {
   const grid = el('cal-grid');
   if (!grid || !CAL.weekStart) return;
-  // Add class to layout for full-width mode
-  el('cal-grid')?.closest('.cal-layout')?.classList.add('is-week-view');
-  el('cal-grid')?.closest('.cal-layout')?.classList.remove('is-day-view');
+  grid.closest('.cal-layout')?.classList.add('is-week-view');
+  grid.closest('.cal-layout')?.classList.remove('is-day-view');
 
   const ws   = CAL.weekStart;
   const days = Array.from({length:7}, (_,i) => new Date(ws.getFullYear(), ws.getMonth(), ws.getDate()+i));
+  const d0 = days[0], d6 = days[6];
   const todayStr = todayS();
 
-  const d0 = days[0], d6 = days[6];
+  // Title
   const titleEnd   = `${d6.getDate()} ${RU_MONTHS_GEN[d6.getMonth()]} ${d6.getFullYear()}`;
-  const titleStart = d0.getMonth() === d6.getMonth()
-    ? String(d0.getDate())
-    : `${d0.getDate()} ${RU_MONTHS_GEN[d0.getMonth()]}`;
+  const titleStart = d0.getMonth() === d6.getMonth() ? String(d0.getDate()) : `${d0.getDate()} ${RU_MONTHS_GEN[d0.getMonth()]}`;
   el('cal-month-title').textContent = `${titleStart} – ${titleEnd}`;
 
+  // Collect all non-allday events to find hour range
+  const weekEvs = CAL.events.filter(ev => {
+    const d = calLocalDate(ev.start_at);
+    return days.some(day => calYMD(day) === d);
+  });
+  const allDayEvs = weekEvs.filter(ev => ev.is_all_day);
+  const timedEvs  = weekEvs.filter(ev => !ev.is_all_day);
+
+  // Hour range: 7am–22pm or around actual events
+  const hours = timedEvs.map(ev => new Date(ev.start_at).getHours());
+  const startH = hours.length ? Math.max(0,  Math.min(...hours) - 1) : 7;
+  const endH   = hours.length ? Math.min(23, Math.max(...hours) + 2) : 21;
+  const SLOT_H = 56; // px per hour
+
+  // Build events map by date
   const evMap = {};
-  CAL.events.forEach(ev => {
+  timedEvs.forEach(ev => {
     const d = calLocalDate(ev.start_at);
     (evMap[d] = evMap[d] || []).push(ev);
   });
+  const allDayMap = {};
+  allDayEvs.forEach(ev => {
+    const d = calLocalDate(ev.start_at);
+    (allDayMap[d] = allDayMap[d] || []).push(ev);
+  });
 
-  let cols = '';
+  // ── Build HTML ──
+  // Time column width
+  const TW = 44;
+
+  let html = `<div class="cal-tg-outer">`;
+
+  // All-day strip
+  const hasAllDay = allDayEvs.length > 0;
+  if (hasAllDay) {
+    html += `<div class="cal-tg-allday-row">
+      <div class="cal-tg-time-gutter" style="width:${TW}px;font-size:9px;color:var(--c-txt3);padding-top:6px;text-align:right;padding-right:8px">Весь<br>день</div>
+      <div class="cal-tg-allday-cols">`;
+    days.forEach(d => {
+      const ds = calYMD(d);
+      const evs = allDayMap[ds] || [];
+      html += `<div class="cal-tg-allday-col" data-date="${ds}">
+        ${evs.map(ev => {
+          const pc = calEventColorClass(ev);
+          const safe = (ev.title||'').replace(/"/g,'&quot;');
+          return `<div class="cal-tg-allday-pill cal-tg-pill--${pc}" draggable="true"
+            data-event-id="${ev.id}" data-date="${ds}" data-title="${safe}"
+            onclick="calClickEvent(event,'${ev.id}')">${ev.title||''}</div>`;
+        }).join('')}
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Grid body
+  html += `<div class="cal-tg-body">`;
+
+  // Scrollable container
+  html += `<div class="cal-tg-scroll" id="cal-tg-scroll">`;
+
+  // Inner layout: time gutter + day columns
+  html += `<div class="cal-tg-inner" style="height:${(endH - startH + 1) * SLOT_H}px">`;
+
+  // Time gutter
+  html += `<div class="cal-tg-time-col" style="width:${TW}px">`;
+  for (let h = startH; h <= endH; h++) {
+    html += `<div class="cal-tg-hour-label" style="top:${(h - startH) * SLOT_H}px">${pad(h)}:00</div>`;
+  }
+  html += `</div>`;
+
+  // Day columns
+  html += `<div class="cal-tg-cols">`;
   days.forEach(d => {
-    const dateStr = calYMD(d);
-    const isToday = dateStr === todayStr;
-    const isSel   = dateStr === CAL.selDate;
-    const dayEvs  = (evMap[dateStr] || []).sort(calSortEvents);
-    cols += `<div class="cal-week-col${isToday?' is-today':''}${isSel?' is-selected':''}" data-date="${dateStr}" onclick="calSelectDate('${dateStr}')">
-      <div class="cal-week-header">
-        <span class="cal-week-wd">${RU_WD_SHORT[d.getDay()]}</span>
-        <span class="cal-week-num${isToday?' is-today-num':''}">${d.getDate()}</span>
-      </div>
-      <div class="cal-week-events">${dayEvs.map(ev => calPillHTML(ev, dateStr)).join('')}</div>
+    const ds      = calYMD(d);
+    const isToday = ds === todayStr;
+    const isSel   = ds === CAL.selDate;
+    html += `<div class="cal-tg-col${isToday?' is-today':''}${isSel?' is-selected':''}" data-date="${ds}" onclick="calSelectDate('${ds}')">`;
+    // Hour slot targets for drag-drop
+    for (let h = startH; h <= endH; h++) {
+      html += `<div class="cal-tg-slot" data-date="${ds}" data-hour="${h}" style="top:${(h-startH)*SLOT_H}px;height:${SLOT_H}px"></div>`;
+    }
+    // Events positioned absolutely
+    (evMap[ds] || []).forEach(ev => {
+      const start   = new Date(ev.start_at);
+      const end     = new Date(ev.end_at);
+      const startMin = start.getHours()*60 + start.getMinutes();
+      const endMin   = end.getHours()*60   + end.getMinutes();
+      const topPx    = ((startMin - startH*60) / 60) * SLOT_H;
+      const heightPx = Math.max(22, ((endMin - startMin) / 60) * SLOT_H - 2);
+      const pc       = calEventColorClass(ev);
+      const safe     = (ev.title||'').replace(/"/g,'&quot;');
+      html += `<div class="cal-tg-event cal-tg-event--${pc}" draggable="true"
+        data-event-id="${ev.id}" data-date="${ds}" data-title="${safe}"
+        onclick="calClickEvent(event,'${ev.id}')"
+        style="top:${topPx}px;height:${heightPx}px">
+        <div class="cal-tg-event-title">${ev.title||''}</div>
+        <div class="cal-tg-event-time">${calLocalTime(ev.start_at)} – ${calLocalTime(ev.end_at)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  html += `</div>`; // cal-tg-cols
+  html += `</div>`; // cal-tg-inner
+  html += `</div>`; // cal-tg-scroll
+  html += `</div>`; // cal-tg-body
+  html += `</div>`; // cal-tg-outer
+
+  // Week column headers (above the grid)
+  const RU_WD_S = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  let headers = `<div class="cal-tg-header">
+    <div class="cal-tg-header-gutter" style="width:${TW}px"></div>
+    <div class="cal-tg-header-cols">`;
+  days.forEach(d => {
+    const ds      = calYMD(d);
+    const isToday = ds === todayStr;
+    const isSel   = ds === CAL.selDate;
+    headers += `<div class="cal-tg-header-col${isToday?' is-today':''}${isSel?' is-selected':''}" onclick="calSelectDate('${ds}')">
+      <span class="cal-tg-hwd">${RU_WD_S[d.getDay()]}</span>
+      <span class="cal-tg-hnum${isToday?' is-today-num':''}">${d.getDate()}</span>
     </div>`;
   });
-  // Wrap in scrollable container for mobile
-  grid.innerHTML = `<div class="cal-week-wrap"><div class="cal-week-view">${cols}</div></div>`;
+  headers += `</div></div>`;
+
+  grid.innerHTML = headers + html;
+
+  // Scroll to first event
+  requestAnimationFrame(() => {
+    const scroll = el('cal-tg-scroll');
+    if (scroll) scroll.scrollTop = Math.max(0, (startH - 7) * SLOT_H);
+  });
 }
 
-/* ── DAY VIEW — time slot grid ── */
+/* ── DAY VIEW — Outlook-style time grid ── */
 function calRenderDay() {
   const grid = el('cal-grid');
   if (!grid || !CAL.dayDate) return;
-  // Update layout class
-  el('cal-grid')?.closest('.cal-layout')?.classList.add('is-day-view');
-  el('cal-grid')?.closest('.cal-layout')?.classList.remove('is-week-view');
+  grid.closest('.cal-layout')?.classList.add('is-day-view');
+  grid.closest('.cal-layout')?.classList.remove('is-week-view');
 
   const d       = CAL.dayDate;
   const dateStr = calYMD(d);
   CAL.selDate   = dateStr;
   el('cal-month-title').textContent = `${RU_WD_FULL[d.getDay()]}, ${d.getDate()} ${RU_MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`;
 
-  const dayEvs = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr).sort(calSortEvents);
+  const dayEvs    = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr).sort(calSortEvents);
+  const allDayEvs = dayEvs.filter(ev => ev.is_all_day);
+  const timedEvs  = dayEvs.filter(ev => !ev.is_all_day);
+
   calUpdateAside(dateStr);
 
-  if (!dayEvs.length) {
-    grid.innerHTML = `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этот день<br><span style="font-size:11px">Нажмите + в боковой панели чтобы добавить</span></div>`;
+  const TW    = 52;
+  const SLOT_H = 60; // px per hour
+
+  // Hour range
+  const hours = timedEvs.map(ev => new Date(ev.start_at).getHours());
+  const startH = hours.length ? Math.max(0,  Math.min(...hours) - 1) : 7;
+  const endH   = hours.length ? Math.min(23, Math.max(...hours) + 2) : 21;
+
+  let html = `<div class="cal-tg-outer cal-tg-outer--day">`;
+
+  // All-day
+  if (allDayEvs.length) {
+    html += `<div class="cal-tg-allday-row">
+      <div class="cal-tg-time-gutter" style="width:${TW}px;font-size:9px;color:var(--c-txt3);text-align:right;padding-right:8px;padding-top:6px">Весь<br>день</div>
+      <div class="cal-tg-allday-cols">
+        <div class="cal-tg-allday-col" data-date="${dateStr}">
+          ${allDayEvs.map(ev => {
+            const pc   = calEventColorClass(ev);
+            const safe = (ev.title||'').replace(/"/g,'&quot;');
+            return `<div class="cal-tg-allday-pill cal-tg-pill--${pc}" draggable="true"
+              data-event-id="${ev.id}" data-date="${dateStr}" data-title="${safe}"
+              onclick="calClickEvent(event,'${ev.id}')">${ev.title||''}</div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Header
+  html += `<div class="cal-tg-header">
+    <div class="cal-tg-header-gutter" style="width:${TW}px"></div>
+    <div class="cal-tg-header-cols">
+      <div class="cal-tg-header-col is-today is-selected" style="flex:1">
+        <span class="cal-tg-hwd">${RU_WD_FULL[d.getDay()]}</span>
+        <span class="cal-tg-hnum is-today-num">${d.getDate()}</span>
+      </div>
+    </div>
+  </div>`;
+
+  // Empty state inside grid
+  if (!timedEvs.length && !allDayEvs.length) {
+    html += `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этот день<br><span style="font-size:11px;color:var(--c-txt3)">Нажмите + чтобы добавить</span></div>`;
+    html += `</div>`;
+    grid.innerHTML = html;
     return;
   }
 
-  // Build hourly slots — show all hours from first to last event + buffer
-  const allHours = dayEvs.filter(ev => !ev.is_all_day).map(ev => new Date(ev.start_at).getHours());
-  const minH = allHours.length ? Math.max(0, Math.min(...allHours) - 1) : 8;
-  const maxH = allHours.length ? Math.min(23, Math.max(...allHours) + 2) : 20;
-
-  const evByHour = {};
-  dayEvs.forEach(ev => {
-    if (ev.is_all_day) { (evByHour['allday'] = evByHour['allday']||[]).push(ev); return; }
-    const h = new Date(ev.start_at).getHours();
-    (evByHour[h] = evByHour[h]||[]).push(ev);
+  // Grid body
+  html += `<div class="cal-tg-body"><div class="cal-tg-scroll" id="cal-tg-scroll">
+    <div class="cal-tg-inner" style="height:${(endH - startH + 1) * SLOT_H}px">
+      <div class="cal-tg-time-col" style="width:${TW}px">`;
+  for (let h = startH; h <= endH; h++) {
+    html += `<div class="cal-tg-hour-label" style="top:${(h-startH)*SLOT_H}px">${pad(h)}:00</div>`;
+  }
+  html += `</div><div class="cal-tg-cols">
+    <div class="cal-tg-col is-today is-selected" data-date="${dateStr}" style="width:100%;flex:1">`;
+  // Slot targets
+  for (let h = startH; h <= endH; h++) {
+    html += `<div class="cal-tg-slot" data-date="${dateStr}" data-hour="${h}" style="top:${(h-startH)*SLOT_H}px;height:${SLOT_H}px"></div>`;
+  }
+  // Events
+  timedEvs.forEach(ev => {
+    const start    = new Date(ev.start_at);
+    const end      = new Date(ev.end_at);
+    const startMin = start.getHours()*60 + start.getMinutes();
+    const endMin   = end.getHours()*60   + end.getMinutes();
+    const topPx    = ((startMin - startH*60) / 60) * SLOT_H;
+    const heightPx = Math.max(28, ((endMin - startMin) / 60) * SLOT_H - 3);
+    const pc       = calEventColorClass(ev);
+    const safe     = (ev.title||'').replace(/"/g,'&quot;');
+    html += `<div class="cal-tg-event cal-tg-event--${pc}" draggable="true"
+      data-event-id="${ev.id}" data-date="${dateStr}" data-title="${safe}"
+      onclick="calClickEvent(event,'${ev.id}')"
+      style="top:${topPx}px;height:${heightPx}px">
+      <div class="cal-tg-event-title">${ev.title||''}</div>
+      <div class="cal-tg-event-time">${calLocalTime(ev.start_at)} – ${calLocalTime(ev.end_at)}</div>
+    </div>`;
   });
+  html += `</div></div></div></div></div></div>`;
 
-  const allDayEvs = evByHour['allday'] || [];
-  let html = '<div class="cal-day-wrap"><div class="cal-day-slot-grid">';
-
-  if (allDayEvs.length) {
-    html += `<div class="cal-day-slot" data-date="${dateStr}" data-hour="allday">
-      <div class="cal-day-slot-time" style="font-size:9px;padding-top:12px">Весь<br>день</div>
-      <div class="cal-day-slot-events">${allDayEvs.map(ev => calDayEventBlockHTML(ev)).join('')}</div>
-    </div>`;
-  }
-
-  for (let h = minH; h <= maxH; h++) {
-    const slotEvs = evByHour[h] || [];
-    html += `<div class="cal-day-slot" data-date="${dateStr}" data-hour="${h}">
-      <div class="cal-day-slot-time">${pad(h)}:00</div>
-      <div class="cal-day-slot-events">${slotEvs.map(ev => calDayEventBlockHTML(ev)).join('')}</div>
-    </div>`;
-  }
-  html += '</div></div>';
   grid.innerHTML = html;
+
+  requestAnimationFrame(() => {
+    const scroll = el('cal-tg-scroll');
+    if (scroll) scroll.scrollTop = Math.max(0, (startH - 7) * SLOT_H);
+  });
 }
 
-function calDayEventBlockHTML(ev) {
-  const pc       = calEventColorClass(ev);
-  const startT   = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
-  const endT     = ev.is_all_day ? '' : ` – ${calLocalTime(ev.end_at)}`;
-  const safe     = (ev.title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  return `<div class="cal-day-event-block cal-day-event-block--${pc}" draggable="true"
-    data-event-id="${ev.id}" data-date="${calLocalDate(ev.start_at)}" data-title="${safe}"
-    onclick="calClickEvent(event,'${ev.id}')" title="${ev.title||''}">
-    <div class="cal-day-event-info">
-      <div class="cal-day-event-title">${ev.title||''}</div>
-      <div class="cal-day-event-time">${startT}${endT}</div>
-    </div>
-  </div>`;
+/* ── AGENDA VIEW ── */
+function calRenderAgenda() {
+  const grid = el('cal-grid');
+  if (!grid) return;
+  grid.closest('.cal-layout')?.classList.remove('is-week-view','is-day-view');
+  grid.closest('.cal-layout')?.classList.add('is-agenda-view');
+
+  el('cal-month-title').textContent = RU_MONTHS[CAL.month] + ' ' + CAL.year;
+
+  // Show 60 days from start of current month
+  const startDate = new Date(CAL.year, CAL.month, 1);
+  const endDate   = new Date(CAL.year, CAL.month + 2, 0); // end of next month
+  const todayStr  = todayS();
+
+  // Group events by date
+  const evMap = {};
+  CAL.events.forEach(ev => {
+    const d = calLocalDate(ev.start_at);
+    (evMap[d] = evMap[d] || []).push(ev);
+  });
+
+  // Build day range
+  const days = [];
+  let cur = new Date(startDate);
+  while (cur <= endDate) {
+    days.push(calYMD(cur));
+    cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate()+1);
+  }
+
+  // Only show days that have events (or today)
+  const activeDays = days.filter(d => evMap[d]?.length || d === todayStr);
+
+  if (!activeDays.length) {
+    grid.innerHTML = `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этом периоде</div>`;
+    return;
+  }
+
+  const RU_WD = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  let html = '<div class="cal-agenda">';
+
+  activeDays.forEach(ds => {
+    const d       = calDateAt(ds);
+    const isToday = ds === todayStr;
+    const evs     = (evMap[ds] || []).sort(calSortEvents);
+    const [y,m,dv] = ds.split('-');
+    const dateLabel = isToday
+      ? `Сегодня · ${parseInt(dv)} ${RU_MONTHS_GEN[parseInt(m)-1]}`
+      : `${RU_WD[d.getDay()]} · ${parseInt(dv)} ${RU_MONTHS_GEN[parseInt(m)-1]}`;
+
+    html += `<div class="cal-agenda-day${isToday?' is-today':''}">
+      <div class="cal-agenda-day-header" onclick="calSelectDate('${ds}')">
+        <span class="cal-agenda-day-label">${dateLabel}</span>
+        <span class="cal-agenda-day-num${isToday?' is-today-num':''}">${dv}</span>
+      </div>`;
+
+    if (!evs.length) {
+      html += `<div class="cal-agenda-noev">Нет событий</div>`;
+    } else {
+      evs.forEach(ev => {
+        const color  = calEventColor(ev);
+        const startT = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
+        const endT   = ev.is_all_day ? '' : ` – ${calLocalTime(ev.end_at)}`;
+        const who    = calWhoLabel(ev);
+        html += `<div class="cal-agenda-event" onclick="calEditEvent('${ev.id}')">
+          <div class="cal-agenda-event-time">${startT}${endT}</div>
+          <div class="cal-agenda-event-body">
+            <div class="cal-agenda-event-dot" style="background:${color}"></div>
+            <div class="cal-agenda-event-info">
+              <div class="cal-agenda-event-title">${ev.title||''}</div>
+              <div class="cal-agenda-event-meta">${who}${ev.location?` · 📍${ev.location}`:''}</div>
+            </div>
+          </div>
+        </div>`;
+      });
+    }
+    html += `</div>`;
+  });
+  html += '</div>';
+  grid.innerHTML = html;
 }
 
 /* ── SORT: all-day first, then by start_at ── */
@@ -1475,7 +1711,7 @@ window.calDeleteEvent = async function(id) {
   }
 
   function getDropTarget(el) {
-    return el?.closest('.cal-day-slot[data-date][data-hour], .cal-cell[data-date], .cal-week-col[data-date]');
+    return el?.closest('.cal-tg-slot[data-date][data-hour], .cal-tg-allday-col[data-date], .cal-cell[data-date], .cal-week-col[data-date]');
   }
 
   /* ── Mouse DnD ── */
