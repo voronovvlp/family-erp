@@ -114,6 +114,9 @@
         <span class="analytics-btn__arrow">→</span>
       </button>
 
+      <!-- UPCOMING EVENTS (next 12h) -->
+      <div id="home-upcoming-wrap"></div>
+
       <!-- desktop: two-col layout -->
       <div class="home-layout">
         <div class="home-layout__main">
@@ -263,12 +266,12 @@
         <!-- LEFT: Month grid -->
         <div class="cal-main">
           <div class="cal-header">
-            <div style="display:flex;align-items:center;gap:8px">
+            <div class="cal-header__left">
               <button class="cal-nav-btn" onclick="calShiftMonth(-1)">‹</button>
               <button class="cal-nav-btn" onclick="calShiftMonth(1)">›</button>
               <h2 class="cal-header__title" id="cal-month-title">Апрель 2026</h2>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
+            <div class="cal-header__right">
               <div class="cal-view-switcher">
                 <button class="cal-view-btn is-active" id="calv-month" onclick="calSetView('month')">Месяц</button>
                 <button class="cal-view-btn" id="calv-week" onclick="calSetView('week')">Неделя</button>
@@ -359,13 +362,11 @@
           </div>
         </div>
       </div>
-      <div>
-        <p class="modal-field-label">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:10px;font-weight:600;color:var(--c-txt3);text-transform:uppercase;letter-spacing:.10em">
-            <input type="checkbox" id="cal-ev-allday" onchange="calToggleAllDay()">
-            Весь день
-          </label>
-        </p>
+      <div class="cal-allday-row">
+        <label class="cal-allday-label">
+          <input type="checkbox" id="cal-ev-allday" onchange="calToggleAllDay()">
+          <span>Весь день</span>
+        </label>
       </div>
       <div>
         <p class="modal-field-label">Место</p>

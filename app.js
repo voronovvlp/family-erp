@@ -381,6 +381,59 @@ function rHome() {
   el('home-txlist').innerHTML = S.txs.slice(0,limit).length
     ? S.txs.slice(0,limit).map(t => txHTML(t, false)).join('')
     : '<div class="empty"><div class="empty__icon">💸</div>Пока нет операций<br><span class="empty__hint">Добавь первую — займёт 3 секунды 👇</span></div>';
+
+  rHomeUpcoming();
+}
+
+/* ── UPCOMING EVENTS (home screen, next 12h) ── */
+function rHomeUpcoming() {
+  const wrap = el('home-upcoming-wrap');
+  if (!wrap) return;
+  if (!CAL.events || !CAL.events.length) { wrap.innerHTML = ''; return; }
+
+  const now   = new Date();
+  const limit = new Date(now.getTime() + 12 * 60 * 60 * 1000); // +12h
+
+  const upcoming = CAL.events
+    .filter(ev => {
+      if (ev.is_all_day) return false; // skip all-day on home screen
+      const start = new Date(ev.start_at);
+      return start >= now && start <= limit;
+    })
+    .sort((a,b) => new Date(a.start_at) - new Date(b.start_at))
+    .slice(0, 4);
+
+  if (!upcoming.length) { wrap.innerHTML = ''; return; }
+
+  const rows = upcoming.map(ev => {
+    const color   = calEventColor(ev);
+    const startT  = calLocalTime(ev.start_at);
+    const endT    = calLocalTime(ev.end_at);
+    const who     = calWhoLabel(ev);
+    // Time until event
+    const diffMs  = new Date(ev.start_at) - now;
+    const diffMin = Math.round(diffMs / 60000);
+    const soon    = diffMin < 60
+      ? `через ${diffMin} мин`
+      : `через ${Math.floor(diffMin/60)} ч`;
+
+    return `<div class="upcoming-event-row" onclick="go('calendar')">
+      <div class="upcoming-event-dot" style="background:${color}"></div>
+      <div class="upcoming-event-info">
+        <div class="upcoming-event-title">${ev.title || ''}</div>
+        <div class="upcoming-event-time">${startT} – ${endT} · ${soon}</div>
+      </div>
+      <div class="upcoming-event-who">${who}</div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="upcoming-card">
+    <div class="upcoming-card__header">
+      <span class="upcoming-card__title">📅 Ближайшие события</span>
+      <button class="upcoming-card__link" onclick="go('calendar')">Все →</button>
+    </div>
+    ${rows}
+  </div>`;
 }
 
 /* ── FILTERS ── */
@@ -701,7 +754,9 @@ async function calInit() {
   CAL.weekStart = calMonday(CAL.dayDate);
   await calLoadEvents();
   calRender();
-  calSelectDate(todayS()); // always highlight today on init
+  calSelectDate(todayS());
+  // Update home screen upcoming events widget
+  rHomeUpcoming();
 }
 
 /* ── VIEW SWITCHER ── */
@@ -765,14 +820,14 @@ window.calGoToday = async function() {
 function calRender() {
   const wd = el('cal-weekdays-row');
   if (CAL.view === 'week') {
-    if (wd) wd.style.display = 'none';
+    wd?.classList.add('is-hidden');
     calRenderWeek(); return;
   }
   if (CAL.view === 'day') {
-    if (wd) wd.style.display = 'none';
+    wd?.classList.add('is-hidden');
     calRenderDay(); return;
   }
-  if (wd) wd.style.display = '';
+  wd?.classList.remove('is-hidden');
   calRenderMonth();
 }
 
@@ -831,9 +886,15 @@ function calRenderMonth() {
     if (dayEvents.length > MAX) {
       pillsHTML += `<div class="cal-more-link" onclick="calSelectDate('${dateStr}');event.stopPropagation()">+${dayEvents.length - MAX} ещё</div>`;
     }
+    // Mobile: colored dots per participant type
+    const mobileDots = dayEvents.slice(0, 2).map(ev => {
+      const c = calEventColorClass(ev);
+      return `<div class="cal-mobile-dot cal-mobile-dot--${c}"></div>`;
+    }).join('');
+    const mobileHTML = dayEvents.length ? `<div class="cal-mobile-dots">${mobileDots}</div>` : '';
 
     cells += `<div class="${cls}" data-date="${dateStr}" onclick="calSelectDate('${dateStr}')">
-      <div class="cal-day-num">${day}</div>${pillsHTML}
+      <div class="cal-day-num">${day}</div>${pillsHTML}${mobileHTML}
     </div>`;
   }
   grid.innerHTML = cells;
@@ -879,7 +940,7 @@ function calRenderWeek() {
   grid.innerHTML = html;
 }
 
-/* ── DAY VIEW ── */
+/* ── DAY VIEW — time slot grid ── */
 function calRenderDay() {
   const grid = el('cal-grid');
   if (!grid || !CAL.dayDate) return;
@@ -888,12 +949,71 @@ function calRenderDay() {
   CAL.selDate   = dateStr;
   el('cal-month-title').textContent = `${RU_WD_FULL[d.getDay()]}, ${d.getDate()} ${RU_MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`;
 
-  const dayEvs = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr).sort(calSortEvents);
-  grid.innerHTML = dayEvs.length
-    ? `<div class="cal-day-list">${calEventListHTML(dayEvs, true)}</div>`
-    : `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этот день</div>`;
-
+  const dayEvs  = CAL.events.filter(ev => calLocalDate(ev.start_at) === dateStr).sort(calSortEvents);
   calUpdateAside(dateStr);
+
+  if (!dayEvs.length) {
+    grid.innerHTML = `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этот день<br><span style="font-size:11px">Нажмите + в боковой панели чтобы добавить</span></div>`;
+    return;
+  }
+
+  // Build hourly slots (only hours that have events ± 1)
+  const hours = new Set();
+  dayEvs.forEach(ev => {
+    if (!ev.is_all_day) {
+      const h = new Date(ev.start_at).getHours();
+      for (let i = Math.max(0, h-1); i <= Math.min(23, h+2); i++) hours.add(i);
+    }
+  });
+  // Always show at least current hour
+  hours.add(new Date().getHours());
+  const sortedHours = [...hours].sort((a,b) => a-b);
+
+  // Group events by start hour
+  const evByHour = {};
+  dayEvs.forEach(ev => {
+    if (ev.is_all_day) { (evByHour['allday'] = evByHour['allday']||[]).push(ev); return; }
+    const h = new Date(ev.start_at).getHours();
+    (evByHour[h] = evByHour[h]||[]).push(ev);
+  });
+
+  const allDayEvs = evByHour['allday'] || [];
+  let html = '<div class="cal-day-slot-grid">';
+
+  // All-day events at top
+  if (allDayEvs.length) {
+    html += `<div class="cal-day-slot" data-date="${dateStr}" data-hour="allday">
+      <div class="cal-day-slot-time" style="padding-top:10px;font-size:9px">Весь день</div>
+      <div class="cal-day-slot-events">${allDayEvs.map(ev => calDayEventBlockHTML(ev)).join('')}</div>
+    </div>`;
+  }
+
+  // Hourly slots
+  sortedHours.forEach(h => {
+    const slotEvs = evByHour[h] || [];
+    const timeStr = `${pad(h)}:00`;
+    html += `<div class="cal-day-slot" data-date="${dateStr}" data-hour="${h}">
+      <div class="cal-day-slot-time">${timeStr}</div>
+      <div class="cal-day-slot-events">${slotEvs.map(ev => calDayEventBlockHTML(ev)).join('')}</div>
+    </div>`;
+  });
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+function calDayEventBlockHTML(ev) {
+  const pc       = calEventColorClass(ev);
+  const startT   = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
+  const endT     = ev.is_all_day ? '' : ` – ${calLocalTime(ev.end_at)}`;
+  const safe     = (ev.title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  return `<div class="cal-day-event-block cal-day-event-block--${pc}" draggable="true"
+    data-event-id="${ev.id}" data-date="${calLocalDate(ev.start_at)}" data-title="${safe}"
+    onclick="calClickEvent(event,'${ev.id}')" title="${ev.title||''}">
+    <div class="cal-day-event-info">
+      <div class="cal-day-event-title">${ev.title||''}</div>
+      <div class="cal-day-event-time">${startT}${endT}</div>
+    </div>
+  </div>`;
 }
 
 /* ── SORT: all-day first, then by start_at ── */
@@ -908,7 +1028,8 @@ function calPillHTML(ev, dateStr) {
   const pc        = calEventColorClass(ev);
   const timeLabel = ev.is_all_day ? 'Весь день' : calLocalTime(ev.start_at);
   const safe      = (ev.title || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  return `<div class="cal-event-pill cal-event-pill--${pc}" draggable="true" data-event-id="${ev.id}" data-date="${dateStr}" data-title="${safe}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title || ''}">${timeLabel} ${ev.title || ''}</div>`;
+  const allDayCls = ev.is_all_day ? ' is-allday' : '';
+  return `<div class="cal-event-pill cal-event-pill--${pc}${allDayCls}" draggable="true" data-event-id="${ev.id}" data-date="${dateStr}" data-title="${safe}" onclick="calClickEvent(event,'${ev.id}')" title="${ev.title || ''}">${timeLabel} ${ev.title || ''}</div>`;
 }
 
 function calEventColorClass(ev) {
@@ -969,24 +1090,24 @@ function calEventListHTML(events, showActions) {
     return '<div class="cal-aside__empty">Нет событий<br><span style="font-size:11px">Нажмите + чтобы добавить</span></div>';
   }
   return events.map(ev => {
-    const color   = calEventColor(ev);
-    const startT  = calLocalTime(ev.start_at);
-    const endT    = calLocalTime(ev.end_at);
-    const time    = ev.is_all_day ? 'Весь день' : `${startT} – ${endT}`;
-    const who     = calWhoLabel(ev);
-    const acts    = showActions
+    const color  = calEventColor(ev);
+    const startT = calLocalTime(ev.start_at);
+    const endT   = calLocalTime(ev.end_at);
+    const time   = ev.is_all_day ? '🗓 Весь день' : `${startT} – ${endT}`;
+    const who    = calWhoLabel(ev);
+    const acts   = showActions
       ? `<div class="cal-event-actions">
            <button class="tx-action-btn" onclick="calEditEvent('${ev.id}');event.stopPropagation()">✏️</button>
            <button class="tx-action-btn tx-action-btn--del" onclick="calDeleteEvent('${ev.id}');event.stopPropagation()">🗑</button>
          </div>`
       : '';
+    const loc = ev.location ? `<div class="cal-event-loc">📍 ${ev.location}</div>` : '';
     return `<div class="cal-event-item" onclick="calEditEvent('${ev.id}')">
       <div class="cal-event-color" style="background:${color}"></div>
       <div class="cal-event-body">
         <div class="cal-event-title">${ev.title || ''}</div>
         <div class="cal-event-time">${time}</div>
-        <div class="cal-event-who">${who}</div>
-        ${ev.location ? `<div class="cal-event-time">📍 ${ev.location}</div>` : ''}
+        <div class="cal-event-who">${who}</div>${loc}
       </div>
       ${acts}
     </div>`;
@@ -1030,6 +1151,7 @@ window.openCalEventModal = function(prefillDate) {
   // Show time inputs (might be hidden from previous all-day)
   el('cal-ev-start-time').classList.remove('is-hidden');
   el('cal-ev-end-time').classList.remove('is-hidden');
+  document.querySelectorAll('.cal-time-row').forEach(r => r.classList.remove('is-allday'));
 
   CAL.participants = { vova: true, yulia: false };
   calUpdateParticipantUI();
@@ -1061,12 +1183,14 @@ function calUpdateParticipantUI() {
 
 window.calToggleAllDay = function() {
   const checked = el('cal-ev-allday').checked;
-  el('cal-ev-start-time').classList.toggle('is-hidden', checked);
-  el('cal-ev-end-time').classList.toggle('is-hidden', checked);
-  // Fix end_at for all-day: set to end of same day
+  // Toggle is-allday class on the time row — CSS hides time inputs
+  el('cal-ev-start-time')?.classList.toggle('is-hidden', checked);
+  el('cal-ev-end-time')?.classList.toggle('is-hidden', checked);
+  // Also toggle class on time row for container-level styling
+  document.querySelectorAll('.cal-time-row').forEach(r => r.classList.toggle('is-allday', checked));
   if (checked) {
-    const sd = el('cal-ev-start-date').value;
-    if (sd) el('cal-ev-end-date').value = sd;
+    const sd = el('cal-ev-start-date')?.value;
+    if (sd && el('cal-ev-end-date')) el('cal-ev-end-date').value = sd;
   }
 };
 
@@ -1248,11 +1372,13 @@ window.calEditEvent = function(id) {
     el('cal-ev-end-date').value   = calLocalDate(ev.end_at);
     el('cal-ev-start-time').classList.add('is-hidden');
     el('cal-ev-end-time').classList.add('is-hidden');
+    document.querySelectorAll('.cal-time-row').forEach(r => r.classList.add('is-allday'));
   } else {
     calSetFields('cal-ev-start-date', 'cal-ev-start-time', ev.start_at);
     calSetFields('cal-ev-end-date',   'cal-ev-end-time',   ev.end_at);
     el('cal-ev-start-time').classList.remove('is-hidden');
     el('cal-ev-end-time').classList.remove('is-hidden');
+    document.querySelectorAll('.cal-time-row').forEach(r => r.classList.remove('is-allday'));
   }
 
   CAL.participants = {
@@ -1291,108 +1417,183 @@ window.calDeleteEvent = async function(id) {
 
 /* ── DRAG AND DROP ── */
 (function initCalDnD() {
-  let dragging = null;
-  let touchId  = null;
-  const ghost  = document.getElementById('cal-drag-ghost');
+  let dragging  = null;  // { id, origDate, origHour }
+  let touchId   = null;
+  let longTimer = null;
+  const ghost   = document.getElementById('cal-drag-ghost');
 
-  /* Mouse DnD */
+  function showGhost(title, x, y) {
+    if (!ghost) return;
+    ghost.textContent = title || '…';
+    ghost.style.display = 'block';
+    moveGhost(x, y);
+  }
+  function moveGhost(x, y) {
+    if (!ghost) return;
+    ghost.style.left = x + 'px';
+    ghost.style.top  = y + 'px';
+  }
+  function hideGhost() { if (ghost) ghost.style.display = 'none'; }
+
+  function clearDragState() {
+    document.querySelectorAll('.is-dragging').forEach(p => p.classList.remove('is-dragging'));
+    document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    dragging = null; touchId = null;
+  }
+
+  // Find drop target — both cal-cell (month/week) and cal-day-slot (day view)
+  function getDropTarget(el) {
+    return el?.closest('[data-date][data-hour], [data-date].cal-cell, [data-date].cal-week-col');
+  }
+
+  // ── Mouse DnD ──
   document.addEventListener('dragstart', e => {
-    const pill = e.target.closest('.cal-event-pill[data-event-id]');
+    const pill = e.target.closest('[data-event-id][draggable]');
     if (!pill) return;
-    dragging = { id: pill.dataset.eventId, origDate: pill.dataset.date };
+    dragging = {
+      id:       pill.dataset.eventId,
+      origDate: pill.dataset.date,
+      origHour: pill.dataset.hour || null,
+      title:    pill.dataset.title || pill.textContent.trim().slice(0,30),
+    };
     pill.classList.add('is-dragging');
     e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setDragImage(new Image(), 0, 0); } catch(_){}
-  });
-  document.addEventListener('dragover', e => {
-    const cell = e.target.closest('[data-date]');
-    if (!cell || !dragging) return;
-    e.preventDefault();
-    document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    cell.classList.add('drag-over');
-  });
-  document.addEventListener('dragleave', e => {
-    if (!e.target.closest('.cal-event-pill')) {
-      e.target.closest('[data-date]')?.classList.remove('drag-over');
+    e.dataTransfer.setData('text/plain', dragging.id);
+    // Custom drag image
+    if (ghost) {
+      ghost.textContent = dragging.title;
+      ghost.style.display = 'block';
+      ghost.style.left = '-9999px';
+      try { e.dataTransfer.setDragImage(ghost, 60, 20); } catch(_) {}
+      setTimeout(() => { if (ghost) ghost.style.display = 'none'; }, 0);
     }
   });
+
+  document.addEventListener('dragover', e => {
+    const target = getDropTarget(e.target);
+    if (!target || !dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+    target.classList.add('drag-over');
+  });
+
+  document.addEventListener('dragleave', e => {
+    const target = getDropTarget(e.target);
+    if (target && !target.contains(e.relatedTarget)) target.classList.remove('drag-over');
+  });
+
   document.addEventListener('drop', async e => {
     e.preventDefault();
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    const cell = e.target.closest('[data-date]');
-    if (!cell || !dragging) { dragging = null; return; }
-    const newDate = cell.dataset.date;
-    if (newDate && newDate !== dragging.origDate) await calMoveEventToDate(dragging.id, newDate);
-    dragging = null;
-  });
-  document.addEventListener('dragend', () => {
-    document.querySelectorAll('.cal-event-pill.is-dragging').forEach(p => p.classList.remove('is-dragging'));
-    document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    dragging = null;
+    const target = getDropTarget(e.target);
+    if (!target || !dragging) { clearDragState(); return; }
+
+    const newDate = target.dataset.date;
+    const newHour = target.dataset.hour;   // undefined for month/week cells
+
+    if (newDate) {
+      const sameDate = newDate === dragging.origDate;
+      const sameHour = newHour === undefined || newHour === dragging.origHour;
+      if (!sameDate || !sameHour) {
+        await calMoveEventToDateHour(dragging.id, newDate, newHour !== undefined ? parseInt(newHour) : null);
+      }
+    }
+    clearDragState();
   });
 
-  /* Touch DnD */
-  let longPressTimer = null;
+  document.addEventListener('dragend', () => { clearDragState(); hideGhost(); });
+
+  // ── Touch DnD (long-press 500ms) ──
   document.addEventListener('touchstart', e => {
-    const pill = e.target.closest('.cal-event-pill[data-event-id]');
+    const pill = e.target.closest('[data-event-id][draggable]');
     if (!pill) return;
-    // Long-press (400ms) to initiate drag on mobile
-    longPressTimer = setTimeout(() => {
-      dragging = { id: pill.dataset.eventId, origDate: pill.dataset.date };
-      touchId  = e.touches[0].identifier;
-      if (ghost) { ghost.textContent = '📅 ' + (pill.dataset.title||''); ghost.style.display = 'block'; }
+    const touch = e.touches[0];
+    longTimer = setTimeout(() => {
+      dragging = {
+        id:       pill.dataset.eventId,
+        origDate: pill.dataset.date,
+        origHour: pill.dataset.hour || null,
+        title:    pill.dataset.title || pill.textContent.trim().slice(0,30),
+      };
+      touchId = touch.identifier;
       pill.classList.add('is-dragging');
-    }, 400);
+      showGhost('📅 ' + dragging.title, touch.clientX, touch.clientY);
+      // haptic if available
+      try { navigator.vibrate && navigator.vibrate(30); } catch(_){}
+    }, 500);
   }, { passive: true });
+
   document.addEventListener('touchmove', e => {
-    clearTimeout(longPressTimer);
+    clearTimeout(longTimer);
     if (!dragging) return;
     const t = Array.from(e.touches).find(x => x.identifier === touchId);
     if (!t) return;
-    if (ghost) { ghost.style.left = t.clientX+'px'; ghost.style.top = t.clientY+'px'; }
+    moveGhost(t.clientX, t.clientY);
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
-    document.elementFromPoint(t.clientX, t.clientY)?.closest('[data-date]')?.classList.add('drag-over');
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    getDropTarget(el)?.classList.add('drag-over');
   }, { passive: true });
+
   document.addEventListener('touchend', async e => {
-    clearTimeout(longPressTimer);
+    clearTimeout(longTimer);
     if (!dragging) return;
     const t = Array.from(e.changedTouches).find(x => x.identifier === touchId);
-    if (ghost) ghost.style.display = 'none';
-    document.querySelectorAll('.drag-over,.is-dragging').forEach(c => { c.classList.remove('drag-over','is-dragging'); });
+    hideGhost();
+    document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
     if (t) {
-      const cell = document.elementFromPoint(t.clientX, t.clientY)?.closest('[data-date]');
-      if (cell?.dataset.date && cell.dataset.date !== dragging.origDate)
-        await calMoveEventToDate(dragging.id, cell.dataset.date);
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      const target = getDropTarget(el);
+      if (target?.dataset.date) {
+        const newDate = target.dataset.date;
+        const newHour = target.dataset.hour;
+        const sameDate = newDate === dragging.origDate;
+        const sameHour = newHour === undefined || newHour === dragging.origHour;
+        if (!sameDate || !sameHour) {
+          await calMoveEventToDateHour(dragging.id, newDate, newHour !== undefined ? parseInt(newHour) : null);
+        }
+      }
     }
-    dragging = null; touchId = null;
+    clearDragState();
   }, { passive: true });
+
   document.addEventListener('touchcancel', () => {
-    clearTimeout(longPressTimer);
-    dragging = null; touchId = null;
-    if (ghost) ghost.style.display = 'none';
-    document.querySelectorAll('.drag-over,.is-dragging').forEach(c => c.classList.remove('drag-over','is-dragging'));
+    clearTimeout(longTimer);
+    hideGhost();
+    clearDragState();
   }, { passive: true });
 })();
 
-async function calMoveEventToDate(eventId, newDate) {
+/* Move event to new date and optionally new hour */
+async function calMoveEventToDateHour(eventId, newDate, newHour) {
   const ev = CAL.events.find(e => e.id === eventId);
   if (!ev) return;
+
   const origStart = new Date(ev.start_at);
   const dur       = new Date(ev.end_at) - origStart;
   const [ny,nm,nd] = newDate.split('-').map(Number);
-  const newStart = new Date(ny, nm-1, nd, origStart.getHours(), origStart.getMinutes(), 0, 0);
+
+  // Determine target hour: if newHour given use it, else keep original
+  const targetH = (newHour !== null && newHour !== undefined) ? newHour : origStart.getHours();
+  const targetM = origStart.getMinutes(); // preserve minutes
+
+  const newStart = new Date(ny, nm-1, nd, targetH, targetM, 0, 0);
   const newEnd   = new Date(newStart.getTime() + dur);
+
+  // Build toast message
+  const timeInfo = newHour !== null ? ` → ${pad(targetH)}:${pad(targetM)}` : '';
+  const dateInfo = newDate !== calLocalDate(ev.start_at) ? ` (${newDate.slice(5)})` : '';
+
   try {
     const { error } = await sb.from('calendar_events').update({
-      start_at: newStart.toISOString(), end_at: newEnd.toISOString(),
+      start_at: newStart.toISOString(),
+      end_at:   newEnd.toISOString(),
     }).eq('id', eventId);
     if (error) throw error;
-    toast('✅ Перенесено');
-    // Optimistic update in local array
+    toast(`✅ Перенесено${dateInfo}${timeInfo}`);
+    // Optimistic local update
     const idx = CAL.events.findIndex(e => e.id === eventId);
-    if (idx !== -1) {
-      CAL.events[idx] = { ...CAL.events[idx], start_at: newStart.toISOString(), end_at: newEnd.toISOString() };
-    }
+    if (idx !== -1) CAL.events[idx] = { ...CAL.events[idx], start_at: newStart.toISOString(), end_at: newEnd.toISOString() };
     calRender();
     if (CAL.selDate) calUpdateAside(CAL.selDate);
   } catch(err) {
