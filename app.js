@@ -1216,50 +1216,54 @@ function calRenderAgenda() {
 
   el('cal-month-title').textContent = RU_MONTHS[CAL.month] + ' ' + CAL.year;
 
-  // Show 60 days from start of current month
-  const startDate = new Date(CAL.year, CAL.month, 1);
-  const endDate   = new Date(CAL.year, CAL.month + 2, 0); // end of next month
   const todayStr  = todayS();
+  // Start from today (or start of month if navigated away), show 60 days
+  const startDate = new Date(Math.max(
+    new Date(CAL.year, CAL.month, 1).getTime(),
+    new Date(todayStr + 'T00:00:00').getTime()
+  ));
+  // Show from start of month to catch past events in month too
+  const monthStart = new Date(CAL.year, CAL.month, 1);
+  const endDate    = new Date(CAL.year, CAL.month + 2, 0);
 
-  // Group events by date
+  // Group events by local date
   const evMap = {};
   CAL.events.forEach(ev => {
     const d = calLocalDate(ev.start_at);
     (evMap[d] = evMap[d] || []).push(ev);
   });
 
-  // Build day range
+  // Build day list from month start to end (60 days), only days with events + today
   const days = [];
-  let cur = new Date(startDate);
+  let cur = new Date(monthStart);
   while (cur <= endDate) {
-    days.push(calYMD(cur));
+    const ds = calYMD(cur);
+    if (evMap[ds]?.length || ds === todayStr) days.push(ds);
     cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate()+1);
   }
 
-  // Only show days that have events (or today)
-  const activeDays = days.filter(d => evMap[d]?.length || d === todayStr);
-
-  if (!activeDays.length) {
-    grid.innerHTML = `<div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этом периоде</div>`;
+  if (!days.length) {
+    grid.innerHTML = `<div class="cal-agenda"><div class="cal-day-empty"><div class="empty__icon">📅</div>Нет событий в этом периоде</div></div>`;
     return;
   }
 
   const RU_WD = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
   let html = '<div class="cal-agenda">';
 
-  activeDays.forEach(ds => {
+  days.forEach(ds => {
     const d       = calDateAt(ds);
     const isToday = ds === todayStr;
+    const isPast  = ds < todayStr;
     const evs     = (evMap[ds] || []).sort(calSortEvents);
     const [y,m,dv] = ds.split('-');
     const dateLabel = isToday
       ? `Сегодня · ${parseInt(dv)} ${RU_MONTHS_GEN[parseInt(m)-1]}`
       : `${RU_WD[d.getDay()]} · ${parseInt(dv)} ${RU_MONTHS_GEN[parseInt(m)-1]}`;
 
-    html += `<div class="cal-agenda-day${isToday?' is-today':''}">
+    html += `<div class="cal-agenda-day${isToday?' is-today':''}${isPast?' is-past':''}" id="agenda-day-${ds}">
       <div class="cal-agenda-day-header" onclick="calSelectDate('${ds}')">
         <span class="cal-agenda-day-label">${dateLabel}</span>
-        <span class="cal-agenda-day-num${isToday?' is-today-num':''}">${dv}</span>
+        <span class="cal-agenda-day-num${isToday?' is-today-num':''}">${parseInt(dv)}</span>
       </div>`;
 
     if (!evs.length) {
@@ -1276,7 +1280,7 @@ function calRenderAgenda() {
             <div class="cal-agenda-event-dot" style="background:${color}"></div>
             <div class="cal-agenda-event-info">
               <div class="cal-agenda-event-title">${ev.title||''}</div>
-              <div class="cal-agenda-event-meta">${who}${ev.location?` · 📍${ev.location}`:''}</div>
+              <div class="cal-agenda-event-meta">${who}${ev.location?` · 📍 ${ev.location}`:''}</div>
             </div>
           </div>
         </div>`;
@@ -1286,6 +1290,12 @@ function calRenderAgenda() {
   });
   html += '</div>';
   grid.innerHTML = html;
+
+  // Scroll to today
+  requestAnimationFrame(() => {
+    const todayEl = document.getElementById('agenda-day-' + todayStr);
+    if (todayEl) todayEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 /* ── SORT: all-day first, then by start_at ── */
@@ -1718,11 +1728,13 @@ window.calDeleteEvent = async function(id) {
   document.addEventListener('dragstart', e => {
     const pill = e.target.closest('[data-event-id][draggable]');
     if (!pill) return;
-    const slot = pill.closest('.cal-day-slot[data-hour]');
+    // Check both old slot format and new time-grid slot format
+    const tgSlot  = pill.closest('.cal-tg-slot[data-hour]');
+    const legSlot = pill.closest('.cal-day-slot[data-hour]');
     dragging = {
       id:       pill.dataset.eventId,
       origDate: pill.dataset.date,
-      origHour: slot ? slot.dataset.hour : null,
+      origHour: (tgSlot || legSlot)?.dataset.hour || null,
       title:    pill.dataset.title || pill.textContent.trim().slice(0, 30),
     };
     pill.classList.add('is-dragging');
@@ -1769,18 +1781,22 @@ window.calDeleteEvent = async function(id) {
 
   document.addEventListener('dragend', clearAll);
 
-  /* ── Touch DnD — long press 600ms, separate from swipe-to-delete ── */
+  /* ── Touch DnD — long press 600ms ──
+     Once dragging is active, prevent page scroll via non-passive listener */
   document.addEventListener('touchstart', e => {
     const pill = e.target.closest('[data-event-id][draggable]');
     if (!pill || e.target.closest('.tx-swipe-wrap')) return;
     const touch = e.touches[0];
+    let startX = touch.clientX, startY = touch.clientY;
+
     longTimer = setTimeout(() => {
       isDragging = true;
-      const slot = pill.closest('.cal-day-slot[data-hour]');
+      const tgSlot  = pill.closest('.cal-tg-slot[data-hour]');
+      const legSlot = pill.closest('.cal-day-slot[data-hour]');
       dragging = {
         id:       pill.dataset.eventId,
         origDate: pill.dataset.date,
-        origHour: slot ? slot.dataset.hour : null,
+        origHour: (tgSlot || legSlot)?.dataset.hour || null,
         title:    pill.dataset.title || pill.textContent.trim().slice(0, 30),
       };
       touchId = touch.identifier;
@@ -1788,22 +1804,32 @@ window.calDeleteEvent = async function(id) {
       showGhost(dragging.title, touch.clientX, touch.clientY);
       try { navigator.vibrate && navigator.vibrate([40]); } catch(_) {}
     }, 600);
+
+    // Cancel long-press if finger moves significantly before timer fires
+    const abortOnMove = (ev) => {
+      const t = Array.from(ev.touches).find(x => x.identifier === touch.identifier);
+      if (!t) return;
+      if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
+        clearTimeout(longTimer); longTimer = null;
+        document.removeEventListener('touchmove', abortOnMove);
+      }
+    };
+    document.addEventListener('touchmove', abortOnMove, { passive: true });
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
-    if (!isDragging) { clearTimeout(longTimer); longTimer = null; return; }
-    if (!dragging) return;
+    if (!isDragging || !dragging) return;
+    e.preventDefault(); // blocks page scroll during active drag
     const t = Array.from(e.touches).find(x => x.identifier === touchId);
     if (!t) return;
     showGhost(dragging.title, t.clientX, t.clientY);
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
     getDropTarget(document.elementFromPoint(t.clientX, t.clientY))?.classList.add('drag-over');
-  }, { passive: true });
+  }, { passive: false });
 
   document.addEventListener('touchend', async e => {
     clearTimeout(longTimer); longTimer = null;
     if (!isDragging || !dragging) { isDragging = false; return; }
-    e.preventDefault();
     const t = Array.from(e.changedTouches).find(x => x.identifier === touchId);
     document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
     if (t) {
@@ -1819,7 +1845,7 @@ window.calDeleteEvent = async function(id) {
       }
     }
     clearAll();
-  }, { passive: false });
+  }, { passive: true });
 
   document.addEventListener('touchcancel', () => {
     clearTimeout(longTimer); longTimer = null; clearAll();
@@ -1835,17 +1861,32 @@ async function calMoveEventToDateHour(eventId, newDate, newHour) {
   const origStart = new Date(ev.start_at);
   const dur       = new Date(ev.end_at) - origStart;
   const [ny,nm,nd] = newDate.split('-').map(Number);
-
-  // Determine target hour: if newHour given use it, else keep original
   const targetH = (newHour !== null && newHour !== undefined) ? newHour : origStart.getHours();
-  const targetM = origStart.getMinutes(); // preserve minutes
+  const targetM = origStart.getMinutes();
 
   const newStart = new Date(ny, nm-1, nd, targetH, targetM, 0, 0);
   const newEnd   = new Date(newStart.getTime() + dur);
-
-  // Build toast message
   const timeInfo = newHour !== null ? ` → ${pad(targetH)}:${pad(targetM)}` : '';
   const dateInfo = newDate !== calLocalDate(ev.start_at) ? ` (${newDate.slice(5)})` : '';
+
+  // Optimistic local update first — instant feedback
+  const idx = CAL.events.findIndex(e => e.id === eventId);
+  if (idx !== -1) CAL.events[idx] = { ...CAL.events[idx], start_at: newStart.toISOString(), end_at: newEnd.toISOString() };
+
+  // Save scroll position before re-render
+  const scrollEl = el('cal-tg-scroll');
+  const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+
+  calRender();
+  if (CAL.selDate) calUpdateAside(CAL.selDate);
+
+  // Restore scroll position after render
+  requestAnimationFrame(() => {
+    const newScroll = el('cal-tg-scroll');
+    if (newScroll && scrollTop > 0) newScroll.scrollTop = scrollTop;
+  });
+
+  toast(`✅ Перенесено${dateInfo}${timeInfo}`);
 
   try {
     const { error } = await sb.from('calendar_events').update({
@@ -1853,15 +1894,12 @@ async function calMoveEventToDateHour(eventId, newDate, newHour) {
       end_at:   newEnd.toISOString(),
     }).eq('id', eventId);
     if (error) throw error;
-    toast(`✅ Перенесено${dateInfo}${timeInfo}`);
-    // Optimistic local update
-    const idx = CAL.events.findIndex(e => e.id === eventId);
-    if (idx !== -1) CAL.events[idx] = { ...CAL.events[idx], start_at: newStart.toISOString(), end_at: newEnd.toISOString() };
+  } catch(err) {
+    toast('Ошибка: ' + err.message);
+    // Rollback: reload from server
+    await calLoadEvents();
     calRender();
     if (CAL.selDate) calUpdateAside(CAL.selDate);
-  } catch(err) {
-    toast('Ошибка переноса: ' + err.message);
-    await calLoadEvents(); calRender();
   }
 }
 
@@ -1869,6 +1907,16 @@ async function calMoveEventToDateHour(eventId, newDate, newHour) {
 lload();
 go('home');
 loadCloud();
+// Pre-load calendar events so home screen upcoming works on first visit
+(async () => {
+  try {
+    const now = new Date();
+    CAL.dayDate   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    CAL.weekStart = calMonday(CAL.dayDate);
+    await calLoadEvents();
+    rHomeUpcoming();
+  } catch(_) {}
+})();
 
 /* ── ENTER KEY on amount input ── */
 el('amount-input')?.addEventListener('keydown', e => {

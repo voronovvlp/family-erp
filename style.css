@@ -1646,6 +1646,17 @@ textarea { resize: none; height: 54px; }
   border: 1px solid var(--c-line);
   overflow: hidden;
   margin-top: 4px;
+  /* Must have explicit height for scroll to work */
+  max-height: calc(100vh - 220px);
+  min-height: 400px;
+}
+/* On mobile: slightly more room */
+@media (max-width: 767px) {
+  .cal-tg-outer {
+    max-height: calc(100vh - 280px);
+    min-height: 360px;
+    border-radius: var(--r-lg);
+  }
 }
 
 /* Column headers row */
@@ -1734,12 +1745,13 @@ textarea { resize: none; height: 54px; }
 .cal-tg-pill--both  { background: rgba(46,204,82,.18);  color: #4DDC6A; }
 
 /* Grid body */
-.cal-tg-body { flex: 1; display: flex; overflow: hidden; }
+.cal-tg-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 .cal-tg-scroll {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;  /* always show scrollbar track */
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;  /* prevent page scroll when at edges */
 }
 
 /* Inner: fixed height, relative positioning */
@@ -1861,6 +1873,7 @@ textarea { resize: none; height: 54px; }
 .cal-agenda-day.is-today .cal-agenda-day-header {
   background: rgba(46,204,82,.06);
 }
+.cal-agenda-day.is-past { opacity: .55; }
 .cal-agenda-day-header {
   display: flex;
   align-items: center;
